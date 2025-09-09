@@ -22,6 +22,8 @@
     .nr-handle{margin-left:.5rem;flex:0 0 auto;width:28px;height:28px;display:flex;align-items:center;justify-content:center;
       border-radius:.45rem;background:rgba(0,0,0,.06);cursor:grab;color:inherit;}
     .nr-handle:active{cursor:grabbing}
+    .nr-del{margin-left:.25rem;flex:0 0 auto;width:28px;height:28px;display:flex;align-items:center;justify-content:center;
+      border-radius:.45rem;background:rgba(0,0,0,.06);cursor:pointer;color:inherit;}
     .nr-btn{background:var(--button-bg);color:var(--button-text);padding:.35rem .6rem;border-radius:.5rem;font-size:.875rem}
     .nr-btn.secondary{background:rgba(255,255,255,.14);color:var(--text-color);}
     .nr-add{align-self:center;border-radius:9999px;width:2.2rem;height:2.2rem;display:flex;align-items:center;justify-content:center;
@@ -214,7 +216,7 @@
     const el=document.createElement('div');
     el.className='nr-card';
     el.dataset.id=item.id;
-    el.innerHTML=`<div class="nr-flex"><div class="nr-title">${escapeHtml(item.prefix)}</div><div class="nr-sub">${escapeHtml(item.name)}</div></div><div class="nr-handle" title="Ziehen">⋮⋮</div>`;
+    el.innerHTML=`<div class="nr-flex"><div class="nr-title">${escapeHtml(item.prefix)}</div><div class="nr-sub">${escapeHtml(item.name)}</div></div><div class="nr-handle" title="Ziehen">⋮⋮</div><button class="nr-del" title="Löschen">✕</button>`;
     return el;
   }
   const escapeHtml=s=>s.replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;","\"":"&quot;"}[c]));
@@ -243,7 +245,8 @@
     function reorderFromDOM(){const order=Array.from(els.list.children).map(el=>el.dataset.id);items.sort((a,b)=>order.indexOf(a.id)-order.indexOf(b.id));}
     const scheduleSave=debounce(500,()=>{if(fileHandle)writeItemsToHandle(fileHandle,items);});
 
-    const sortable=Sortable.create(els.list,{handle:'.nr-handle',animation:150,ghostClass:'nr-ghost',chosenClass:'nr-chosen',onSort:()=>{reorderFromDOM();scheduleSave();}});
+    const sortable=Sortable.create(els.list,{handle:'.nr-handle',animation:150,ghostClass:'nr-ghost',chosenClass:'nr-chosen',group:{name:'nr-'+instanceId,pull:false,put:false},onSort:()=>{reorderFromDOM();scheduleSave();}});
+    els.list.addEventListener('click',e=>{const btn=e.target.closest('.nr-del');if(!btn)return;const card=btn.closest('.nr-card');const id=card.dataset.id;items=items.filter(it=>it.id!==id);card.remove();scheduleSave();});
 
     // add modal
     function openAdd(){els.addModal.classList.add('open');els.addPrefix.value='';els.addName.value='';}

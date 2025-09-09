@@ -47,6 +47,7 @@
   async function idbGet(k){const db=await idbOpen();return new Promise((res,rej)=>{const tx=db.transaction(IDB_STORE,'readonly');const rq=tx.objectStore(IDB_STORE).get(k);rq.onsuccess=()=>res(rq.result||null);rq.onerror=()=>rej(rq.error);});}
   async function idbDel(k){const db=await idbOpen();return new Promise((res,rej)=>{const tx=db.transaction(IDB_STORE,'readwrite');tx.objectStore(IDB_STORE).delete(k);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);});}
   async function ensureRWPermission(handle){if(!handle?.queryPermission)return true;const q=await handle.queryPermission({mode:'readwrite'});if(q==='granted')return true;const r=await handle.requestPermission({mode:'readwrite'});return r==='granted';}
+  async function ensureRPermission(handle){if(!handle?.queryPermission)return true;const q=await handle.queryPermission({mode:'read'});if(q==='granted')return true;const r=await handle.requestPermission({mode:'read'});return r==='granted';}
 
   async function ensureXLSX(){
     if(window.XLSX) return;
@@ -90,10 +91,24 @@
     await w.close();
   }
 
+  async function readRulesFromHandle(handle){
+    await ensureXLSX();
+    const f=await handle.getFile();
+    if(f.size===0)return[];
+    const buf=await f.arrayBuffer();
+    const wb=XLSX.read(buf,{type:'array'});
+    const ws=wb.Sheets['Rules']||wb.Sheets[wb.SheetNames[0]];
+    if(!ws)return[];
+    const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+    return rows.slice(1).filter(r=>r.length&&(r[0]!==''||r[1]!==''))
+      .map(r=>({prefix:String(r[0]||''),name:String(r[1]||'')}))
+      .sort((a,b)=>b.prefix.length-a.prefix.length);
+  }
+
   function buildUI(root){
     root.innerHTML=`
       <div class="rs-root">
-        <div class="rs-head">(Gerätename)</div>
+        <div class="rs-head" style="display:none"></div>
         <div class="rs-form">
           <div class="rs-grid"></div>
           <div class="rs-note"></div>
@@ -111,6 +126,13 @@
               <button class="db-btn rs-pick" style="background:var(--button-bg);color:var(--button-text);border-radius:.5rem;padding:.35rem .6rem">Excel wählen</button>
               <button class="db-btn rs-create" style="background:rgba(0,0,0,.08);border-radius:.5rem;padding:.35rem .6rem">Excel erstellen</button>
               <span class="rs-file db-file"></span>
+            </div>
+          </div>
+          <div class="db-field" style="margin-top:1rem;">
+            <label style="font-size:.85rem;font-weight:600;display:block;margin-bottom:.25rem">Namensregeln</label>
+            <div class="db-row" style="display:flex;gap:.5rem;align-items:center">
+              <button class="db-btn rs-rule-pick" style="background:var(--button-bg);color:var(--button-text);border-radius:.5rem;padding:.35rem .6rem">Excel wählen</button>
+              <span class="rs-rule-file db-file"></span>
             </div>
           </div>
           <div class="db-field" style="margin-top:1rem;">
@@ -136,7 +158,10 @@
       mClose:root.querySelector('.rs-close'),
       mPick:root.querySelector('.rs-pick'),
       mCreate:root.querySelector('.rs-create'),
+      head:root.querySelector('.rs-head'),
       mFile:root.querySelector('.rs-file'),
+      mRulePick:root.querySelector('.rs-rule-pick'),
+      mRuleFile:root.querySelector('.rs-rule-file'),
       mList:root.querySelector('.rs-list'),
       mCols:root.querySelector('.rs-cols'),
       menu
@@ -162,6 +187,7 @@
     const els=buildUI(root);
     const instanceId=instanceIdOf(root);
     const idbKey=`recordSheet:${instanceId}`;
+    const ruleIdbKey=`recordSheetRules:${instanceId}`;
 
     function cloneFields(a){return a.map(f=>({key:f.key,label:f.label,enabled:!!f.enabled}));}
     function loadCfg(){
@@ -170,6 +196,8 @@
       return{
         idbKey:cfg.idbKey||idbKey,
         fileName:cfg.fileName||'',
+        ruleIdbKey:cfg.ruleIdbKey||ruleIdbKey,
+        ruleFileName:cfg.ruleFileName||'',
         fields:Array.isArray(cfg.fields)?cfg.fields:cloneFields(defaultFields),
         columns:cfg.columns||defaultColumns
       };
@@ -179,15 +207,21 @@
 
     let cfg=loadCfg();
     els.mFile.textContent=cfg.fileName?`• ${cfg.fileName}`:'Keine Datei gewählt';
+    els.mRuleFile.textContent=cfg.ruleFileName?`• ${cfg.ruleFileName}`:'Keine Namensregeln';
+    els.head.style.display='none';
     HEAD=cfg.fields.map(f=>f.key);
     let handle=null;
+    let ruleHandle=null;
+    let rules=[];
     let cache=[];
 
     const setNote=s=>els.note.textContent=s||'';
     const copy=async val=>{try{await navigator.clipboard.writeText(val||'');setNote('Kopiert.');setTimeout(()=>setNote(''),800);}catch{setNote('Kopieren fehlgeschlagen');}};
 
-    function applyColumns(){const cols=Math.max(1,parseInt(cfg.columns)||1);els.grid.style.gridTemplateColumns=`repeat(${cols},1fr)`;}
     let fieldEls={};
+    const lookupName=pn=>{for(const r of rules){if(pn.startsWith(r.prefix))return r.name;}return'';};
+    function updateName(){if(!rules.length){els.head.style.display='none';return;}const pn=fieldEls['part']?.input?.value?.trim()||'';const name=lookupName(pn);els.head.style.display='block';els.head.textContent=name||'Unbekanntes Gerät';}
+    function applyColumns(){const cols=Math.max(1,parseInt(cfg.columns)||1);els.grid.style.gridTemplateColumns=`repeat(${cols},1fr)`;}
     function renderFields(){
       HEAD=cfg.fields.map(f=>f.key);
       els.grid.innerHTML='';fieldEls={};
@@ -198,7 +232,7 @@
         const input=wrap.querySelector('input');
         const btn=wrap.querySelector('.rs-copy');
         btn.addEventListener('click',()=>copy(input.value));
-        if(f.key!=='meldung'){input.addEventListener('input',()=>putField(f.key,input.value));}
+        if(f.key!=='meldung'){input.addEventListener('input',()=>{putField(f.key,input.value);if(f.key==='part')updateName();});}
         els.grid.appendChild(wrap);
         fieldEls[f.key]={input};
       });
@@ -231,13 +265,16 @@
     els.menu.querySelector('.mi-opt').addEventListener('click',()=>{els.menu.classList.remove('open');openModal();});
 
     async function bindHandle(h){const ok=await ensureRWPermission(h);if(!ok){setNote('Berechtigung verweigert.');return false;}handle=h;await idbSet(cfg.idbKey,h);cfg.fileName=h.name||'Dictionary.xlsx';saveCfg(cfg);els.mFile.textContent=`• ${cfg.fileName}`;return true;}
+    async function bindRuleHandle(h){const ok=await ensureRPermission(h);if(!ok){setNote('Berechtigung verweigert.');return false;}ruleHandle=h;await idbSet(cfg.ruleIdbKey,h);cfg.ruleFileName=h.name||'Rules.xlsx';saveCfg(cfg);els.mRuleFile.textContent=`• ${cfg.ruleFileName}`;try{rules=await readRulesFromHandle(h);}catch{rules=[];}updateName();return true;}
     els.mPick.onclick=async()=>{try{const [h]=await showOpenFilePicker({types:[{description:'Excel',accept:{'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':['.xlsx']}}],excludeAcceptAllOption:false,multiple:false});if(h&&await bindHandle(h)){cache=await readAll(h);setNote('Datei geladen.');refreshFromCache();}}catch(e){if(e?.name!=='AbortError')setNote('Auswahl fehlgeschlagen.');}};
     els.mCreate.onclick=async()=>{try{const h=await showSaveFilePicker({suggestedName:'Dictionary.xlsx',types:[{description:'Excel',accept:{'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':['.xlsx']}}]});if(h&&await bindHandle(h)){cache=[];await writeAll(h,cache);setNote('Datei erstellt.');refreshFromCache();}}catch(e){if(e?.name!=='AbortError')setNote('Erstellen fehlgeschlagen.');}};
+    els.mRulePick.onclick=async()=>{try{const [h]=await showOpenFilePicker({types:[{description:'Excel',accept:{'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':['.xlsx']}}],excludeAcceptAllOption:false,multiple:false});if(h)await bindRuleHandle(h);}catch(e){if(e?.name!=='AbortError')setNote('Auswahl fehlgeschlagen.');}};
 
     (async()=>{try{const h=await idbGet(cfg.idbKey);if(h&&await ensureRWPermission(h)){handle=h;cache=await readAll(h);refreshFromCache();}}catch(e){}})();
+    (async()=>{try{const h=await idbGet(cfg.ruleIdbKey);if(h&&await ensureRPermission(h)){ruleHandle=h;rules=await readRulesFromHandle(h);els.mRuleFile.textContent=`• ${cfg.ruleFileName||h.name||'Rules.xlsx'}`;updateName();}}catch(e){}})();
 
     function activeMeldung(){return(loadDoc()?.general?.Meldung||'').trim();}
-    function refreshFromCache(){const m=activeMeldung();const row=cache.find(r=>(r.meldung||'').trim()===m);cfg.fields.forEach(f=>{const el=fieldEls[f.key];if(!el)return;if(f.key==='meldung')el.input.value=m;else el.input.value=row?.[f.key]||'';});}
+    function refreshFromCache(){const m=activeMeldung();const row=cache.find(r=>(r.meldung||'').trim()===m);cfg.fields.forEach(f=>{const el=fieldEls[f.key];if(!el)return;if(f.key==='meldung')el.input.value=m;else el.input.value=row?.[f.key]||'';});updateName();}
 
     addEventListener('storage',e=>{if(e.key===LS_DOC)refreshFromCache();});
     addEventListener('visibilitychange',()=>{if(!document.hidden)refreshFromCache();});
@@ -249,7 +286,7 @@
 
     renderFields();
 
-    const mo=new MutationObserver(()=>{if(!document.body.contains(root)){clearInterval(watcher);els.menu?.remove();(async()=>{try{await idbDel(cfg.idbKey);}catch{}try{removeCfg();}catch{}})();mo.disconnect();}});
+    const mo=new MutationObserver(()=>{if(!document.body.contains(root)){clearInterval(watcher);els.menu?.remove();(async()=>{try{await idbDel(cfg.idbKey);}catch{}try{await idbDel(cfg.ruleIdbKey);}catch{}try{removeCfg();}catch{}})();mo.disconnect();}});
     mo.observe(document.body,{childList:true,subtree:true});
   };
 })();

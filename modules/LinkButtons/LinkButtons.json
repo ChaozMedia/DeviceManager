@@ -1,0 +1,14 @@
+{
+  "name": "Link-Knöpfe",
+  "icon": "📟",
+  "script": "renderOpsPanel",
+  "minW": 2,
+  "minH": 2,
+  "w": 3,
+  "h": 3,
+  "settings": {
+    "leftTop": "Event",
+    "leftBottom": "CMDS",
+    "rightLabels": ["ZIAUF3", "ZILLK", "ZIKV", "ZIQA"]
+  }
+}

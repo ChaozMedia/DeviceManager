@@ -2,367 +2,1360 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8" />
-  <title>Modules Grid (Minimal)</title>
+  <title>Shopguide V3</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Tailwind for easy styling -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- GridStack styles and scripts -->
   <link href="https://cdn.jsdelivr.net/npm/gridstack@9.2.2/dist/gridstack.min.css" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/gridstack@9.2.2/dist/gridstack-all.js"></script>
+  <script src="https://code.jquery.com/jquery-3.7.1.js"></script>
+  <script src="https://code.jquery.com/ui/1.14.1/jquery-ui.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+
+  <link rel="stylesheet" href="https://code.jquery.com/ui/1.14.1/themes/base/jquery-ui.css">
   <style>
+    :root {
+      /* General colours */
+      --app-bg: #f3f4f6;
+      --sidebar-bg: #f3f4f6;
+      --sidebar-text: #1f2937;
+      --top-bar-bg: #ffffff;
+      --button-bg: #2563eb;
+      --button-text: #ffffff;
+      --border-color: #e5e7eb;
+      /* Module colours */
+      --module-bg: #005983;
+      --text-color: #ffffff;
+      --module-border-radius: 1.25rem;
+      --module-header-bg: rgba(255,255,255,0.08);
+      --module-header-text: #ffffff;
+      /* Module border */
+      --module-border-color: #e5e7eb;
+      --danger-bg: #ef4444;
+      --danger-text: #ffffff;
+      /* Tabs colours */
+      --tab-active-bg: #2563eb;
+      --tab-active-text: #ffffff;
+      --tab-inactive-bg: #e5e7eb;
+      --tab-inactive-text: #1f2937;
+      /* Grid hint */
+      --grid-hint: #60a5fa;
+
+      /* Sidebar module card colours */
+      --sidebar-module-card-bg: #ffffff;
+      --sidebar-module-card-text: #1f2937;
+      --sidebar-module-card-border: #e5e7eb;
+
+      /* Attachment text colour for module cards */
+      --sidebar-module-card-attachment-color: #6B7280;
+
+      /* Body text colour (used for general text; separate from sidebar text) */
+      --body-text: #1f2937;
+    }
+
     html, body { height: 100%; }
-    body { margin: 0; background: #f3f4f6; }
+    body { margin: 0; background: var(--app-bg); color: var(--body-text); }
+    /* module contents */
     .grid-stack-item-content {
-      background: #005983;
-      border-radius: 1.25rem;
-      color: white;
+      background: var(--module-bg);
+      border-radius: var(--module-border-radius);
+      color: var(--text-color);
       padding: 1rem;
       display: flex;
       flex-direction: column;
-      min-height: 220px;
+      min-height: 10px;
+      /* apply border using module border colour */
+      border: 1px solid var(--module-border-color);
     }
-    .drag-handle { display:flex; align-items:center; justify-content:space-between; margin-bottom:.5rem; }
+    .drag-handle {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      margin-bottom:.5rem;
+      cursor: move;
+      background: var(--module-header-bg);
+      color: var(--module-header-text);
+      border-radius: calc(var(--module-border-radius) - 0.25rem);
+      padding: .25rem .5rem;
+    }
     .module-card.dragging { opacity: 0.5; }
-    .grid-drop-hint { outline: 2px dashed #60a5fa; outline-offset: -6px; }
-    /* make cards consistently draggable across browsers */
-    .module-card { -webkit-user-drag: element; user-select: none; }
+    .grid-drop-hint { outline: 2px dashed var(--grid-hint); outline-offset: -6px; }
+    .module-card {
+      -webkit-user-drag: element;
+      user-select: none;
+      /* use CSS variables for sidebar module appearance */
+      background-color: var(--sidebar-module-card-bg);
+      color: var(--sidebar-module-card-text);
+      border: 1px solid var(--sidebar-module-card-border);
+    }
+    /* Sidebar collapsed state */
+    #sidebar.collapsed { width: 2.5rem !important; min-width: 2.5rem !important; padding-left: 0; padding-right: 0; }
+    #sidebar.collapsed .list-content { display: none; }
+    #sidebar.collapsed .collapse-icon { transform: rotate(180deg); }
+    #sidebar.collapsed .module-card { pointer-events: none; }
+    #sidebar.collapsed #module-list { pointer-events: none; }
+    /* Topbar, sidebar and buttons use variables */
+    #top-bar { background-color: var(--top-bar-bg) !important; border-bottom: 1px solid var(--border-color) !important; }
+    #sidebar { background-color: var(--sidebar-bg) !important; border-right: 1px solid var(--border-color) !important; color: var(--sidebar-text); }
+    #select-root { background-color: var(--button-bg) !important; color: var(--button-text) !important; }
+    button.remove { background-color: var(--danger-bg) !important; color: var(--danger-text) !important; }
+    /* Tabs */
+    .tab-item { user-select: none; }
+    .tab-active { background: var(--tab-active-bg); color: var(--tab-active-text); }
+    .tab-inactive { background: var(--tab-inactive-bg); color: var(--tab-inactive-text); }
+    /* Settings Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.4);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 50;
+    }
+    .modal {
+      background: white;
+      border-radius: 0.75rem;
+      padding: 1rem;
+      width: 95%;
+      max-width: 720px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+
+      /* Ensure modal text colour does not inherit sidebar text colour */
+      color: var(--body-text);
+    }
+    .settings-nav button {
+      border-radius: .5rem;
+      padding: .5rem .75rem;
+    }
+    .settings-nav button.active { background: #e5e7eb; }
+    .settings-section { display: none; }
+    .settings-section.active { display: block; }
+    .field-grid {
+      display:grid;
+      grid-template-columns: repeat(2, minmax(0,1fr));
+      gap: .75rem;
+    }
+    @media (max-width: 640px){ .field-grid { grid-template-columns: 1fr; } }
+    .form-field label { font-size:.875rem; font-weight:600; }
+
+    /* Simple fade-in animation for startup and loading */
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    .fade-in {
+      animation: fadeIn 0.5s ease-out;
+    }
+
+    /* Attachment text style in sidebar module cards */
+    #module-list .sidebar-module-attachment {
+      color: var(--sidebar-module-card-attachment-color);
+      font-size: 0.75rem;
+    }
+
+    /* Ensure module names in the sidebar wrap rather than truncate */
+    #module-list .module-card .font-semibold {
+      word-break: break-word;
+      white-space: normal;
+    }
+    .gs-remove {
+      position: absolute;
+      top: .35rem;
+      right: .35rem;
+    }
   </style>
+  <style id="custom-styles"></style>
 </head>
 <body>
-  <header class="flex items-center gap-4 bg-white px-5 py-3 shadow">
-    <h1 class="text-lg font-semibold">🗂️ Modules Grid</h1>
-    <div id="current-path" class="text-sm text-gray-600">Root: <em>not set</em></div>
-    <button id="select-root" class="ml-auto bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded">
-      Hauptordner wählen
-    </button>
+  <!-- Top bar with tabs and buttons -->
+  <header id="top-bar" class="flex items-center gap-1 px-3 py-2 shadow" style="height:40px">
+    <div id="tabs-container" class="flex items-center gap-1 flex-wrap"></div>
+    <button id="add-tab" title="Neuen Tab erstellen" class="text-xl px-2 py-1 leading-none hover:opacity-80">➕</button>
+    <button id="select-root" class="ml-auto text-sm px-3 py-1 rounded">Ordner wählen</button>
+    <button id="open-settings" title="Einstellungen" class="bg-gray-300 hover:bg-gray-400 text-gray-800 text-sm px-3 py-1 rounded ml-2">⚙️</button>
   </header>
-
-  <div class="flex">
-    <!-- Sidebar with discovered modules -->
-    <aside class="w-72 min-h-[calc(100vh-56px)] bg-gray-50 border-r p-3">
-      <h2 class="font-semibold mb-2">Module</h2>
-      <div id="module-list" class="flex flex-col gap-2 text-sm text-gray-800">
+  <div class="flex" style="height: calc(100% - 40px);">
+    <aside id="sidebar" class="w-72 min-h-full p-3 relative transition-all duration-300 ease-in-out">
+      <button id="sidebar-toggle" class="absolute top-2 right-2 text-xl collapse-icon" title="Liste ein-/ausblenden">⬅️</button>
+      <h2 class="font-semibold mb-2 list-content">Module</h2>
+      <div id="module-list" class="list-content flex flex-col gap-2 text-sm">
         <div class="text-gray-400">Wähle oben einen Ordner…</div>
       </div>
     </aside>
-
-    <!-- Grid area -->
-    <main class="flex-1 min-h-[calc(100vh-56px)]">
-      <div id="grid" class="grid-stack p-4" style="min-height: calc(100vh - 56px);"></div>
+    <main class="flex-1 min-h-full overflow-auto">
+      <div id="grids" class="relative w-full h-full"></div>
     </main>
   </div>
-
-  <!-- Fallback input if File System Access API is not available -->
   <input type="file" id="folder-input" webkitdirectory directory multiple hidden />
+  <!-- Settings Modal -->
+  <div id="settings-modal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="flex items-center justify-between mb-2">
+        <h2 class="text-lg font-semibold">Einstellungen</h2>
+        <div class="flex gap-2"></div>
+      </div>
+      <div class="settings-nav flex gap-2 mb-3">
+        <button data-section="general" class="active">Allgemein</button>
+        <button data-section="topbar">Topbar</button>
+        <button data-section="sidebar">Sidebar</button>
+        <button data-section="modules">Module</button>
+      </div>
+      <!-- Allgemein section -->
+      <div id="section-general" class="settings-section active">
+        <div class="field-grid">
+          <div class="form-field">
+            <label>App Hintergrundfarbe</label>
+            <input type="color" id="setting-app-bg" value="#f3f4f6" class="w-full border rounded p-1">
+          </div>
+          <div class="form-field">
+            <label>Border Farbe</label>
+            <input type="color" id="setting-border-color" value="#e5e7eb" class="w-full border rounded p-1">
+          </div>
+          <div class="form-field">
+            <label>Primäre Buttonfarbe</label>
+            <input type="color" id="setting-button-bg" value="#2563eb" class="w-full border rounded p-1">
+          </div>
+          <div class="form-field">
+            <label>Primäre Buttontextfarbe</label>
+            <input type="color" id="setting-button-text" value="#ffffff" class="w-full border rounded p-1">
+          </div>
+        </div>
+      </div>
+      <!-- Topbar section -->
+      <div id="section-topbar" class="settings-section">
+        <div class="field-grid">
+          <div class="form-field">
+            <label>Topbar Hintergrundfarbe</label>
+            <input type="color" id="setting-topbar-bg" value="#ffffff" class="w-full border rounded p-1">
+          </div>
+          <div class="form-field">
+            <label>Aktiver Tab Hintergrund</label>
+            <input type="color" id="setting-tab-active-bg" value="#2563eb" class="w-full border rounded p-1">
+          </div>
+          <div class="form-field">
+            <label>Aktiver Tab Text</label>
+            <input type="color" id="setting-tab-active-text" value="#ffffff" class="w-full border rounded p-1">
+          </div>
+          <div class="form-field">
+            <label>Inaktiver Tab Hintergrund</label>
+            <input type="color" id="setting-tab-inactive-bg" value="#e5e7eb" class="w-full border rounded p-1">
+          </div>
+          <div class="form-field">
+            <label>Inaktiver Tab Text</label>
+            <input type="color" id="setting-tab-inactive-text" value="#1f2937" class="w-full border rounded p-1">
+          </div>
+        </div>
+      </div>
+      <!-- Sidebar section -->
+      <div id="section-sidebar" class="settings-section">
+        <div class="field-grid">
+          <div class="form-field">
+            <label>Sidebar Hintergrundfarbe</label>
+            <input type="color" id="setting-sidebar-bg" value="#f3f4f6" class="w-full border rounded p-1">
+          </div>
+          <div class="form-field">
+            <label>Sidebar Textfarbe</label>
+            <input type="color" id="setting-sidebar-text" value="#1f2937" class="w-full border rounded p-1">
+          </div>
+          <div class="form-field">
+            <label>Drag &amp; Drop Hinweisfarbe</label>
+            <input type="color" id="setting-grid-hint" value="#60a5fa" class="w-full border rounded p-1">
+          </div>
+          <!-- New sidebar module card settings -->
+          <div class="form-field">
+            <label>Sidebar Modul Hintergrundfarbe</label>
+            <input type="color" id="setting-sidebar-module-bg" value="#ffffff" class="w-full border rounded p-1">
+          </div>
+          <div class="form-field">
+            <label>Sidebar Modul Textfarbe</label>
+            <input type="color" id="setting-sidebar-module-text" value="#1f2937" class="w-full border rounded p-1">
+          </div>
+          <div class="form-field">
+            <label>Sidebar Modul Rahmenfarbe</label>
+            <input type="color" id="setting-sidebar-module-border" value="#e5e7eb" class="w-full border rounded p-1">
+          </div>
+        </div>
+      </div>
+      <!-- Modules section -->
+      <div id="section-modules" class="settings-section">
+        <div class="field-grid">
+          <div class="form-field">
+            <label>Modul Hintergrundfarbe</label>
+            <input type="color" id="setting-module-bg" value="#005983" class="w-full border rounded p-1">
+          </div>
+          <div class="form-field">
+            <label>Modul Textfarbe</label>
+            <input type="color" id="setting-text-color" value="#ffffff" class="w-full border rounded p-1">
+          </div>
+          <div class="form-field">
+            <label>Modul Rundung (px)</label>
+            <input type="number" id="setting-border-radius" value="20" class="w-full border rounded p-1" min="0">
+          </div>
+          <div class="form-field">
+            <label>Modul Kopfzeile Hintergrund</label>
+            <input type="color" id="setting-module-header-bg" value="#0a0a0a" class="w-full border rounded p-1">
+          </div>
+          <div class="form-field">
+            <label>Modul Kopfzeile Textfarbe</label>
+            <input type="color" id="setting-module-header-text" value="#ffffff" class="w-full border rounded p-1">
+          </div>
+          <div class="form-field">
+            <label>Löschen-Button Hintergrundfarbe</label>
+            <input type="color" id="setting-danger-bg" value="#ef4444" class="w-full border rounded p-1">
+          </div>
+          <div class="form-field">
+            <label>Löschen-Button Textfarbe</label>
+            <input type="color" id="setting-danger-text" value="#ffffff" class="w-full border rounded p-1">
+          </div>
+          <div class="form-field">
+            <label>Modul Rahmenfarbe</label>
+            <input type="color" id="setting-module-border-color" value="#e5e7eb" class="w-full border rounded p-1">
+          </div>
+        </div>
+      </div>
+      <div class="mt-4 flex justify-end gap-2">
+        <button id="close-settings" class="bg-gray-300 hover:bg-gray-400 text-gray-800 text-sm px-3 py-1 rounded">Abbrechen</button>
+        <button id="save-settings" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-3 py-1 rounded">Speichern</button>
+      </div>
+    </div>
+  </div>
+  <script>
+/*
+ * Global settings object; defaults correspond to CSS variables defined above.
+ * New properties for border colour and sidebar text are included.
+ */
+let appSettings = {
+  appBgColor: '#f3f4f6',
+  sidebarBg: '#f3f4f6',
+  sidebarText: '#1f2937',
+  topBarBg: '#ffffff',
+  buttonBg: '#2563eb',
+  buttonText: '#ffffff',
+  borderColor: '#e5e7eb',
+  moduleBgColor: '#005983',
+  textColor: '#ffffff',
+  moduleBorderRadius: '1.25rem',
+  moduleHeaderBg: 'rgba(255,255,255,0.08)',
+  moduleHeaderText: '#ffffff',
+  dangerBg: '#ef4444',
+  dangerText: '#ffffff',
+  tabActiveBg: '#2563eb',
+  tabActiveText: '#ffffff',
+  tabInactiveBg: '#e5e7eb',
+  tabInactiveText: '#1f2937',
+  gridHint: '#60a5fa',
+  moduleBorderColor: '#e5e7eb',
+  sidebarModuleCardBg: '#ffffff',
+  sidebarModuleCardText: '#1f2937',
+  sidebarModuleCardBorder: '#e5e7eb'
+};
 
-<script>
-  let rootDirHandle = null;
-  let modulesDirHandle = null;
-  let liveModuleTemplates = []; // { template, subdir, attachments, dirHandle | fileList }
-  let grid;
 
-  const pathEl = document.getElementById('current-path');
-  const listEl = document.getElementById('module-list');
-  const gridEl = document.getElementById('grid');
+const layoutFileName = 'layout.json';
+const settingsFileName = 'settings.json';
+let rootDirHandle = null;
+let modulesDirHandle = null;
+let liveModuleTemplates = [];
+let tabs = [];
+let activeTabIndex = 0;
+// Start with sidebar closed by default
+let isSidebarOpen = false;
 
-  // Init grid
-  document.addEventListener('DOMContentLoaded', () => {
-    grid = GridStack.init({
-      cellHeight: 100,
-      margin: 5,
-      handle: '.drag-handle',
-      column: 12,
-      float: true
-    }, gridEl);
+/* ==== UNIQUE IDs ==== */
+let usedInstanceIds = new Set();
+let nextModuleInstanceId = 1;
+function generateInstanceId() {
+  if (window.crypto?.randomUUID) {
+    let id;
+    do { id = 'mod-' + crypto.randomUUID(); }
+    while (usedInstanceIds.has(id));
+    usedInstanceIds.add(id);
+    return id;
+  }
+  let id;
+  do { id = 'mod-' + (nextModuleInstanceId++); }
+  while (usedInstanceIds.has(id));
+  usedInstanceIds.add(id);
+  return id;
+}
+
+// Cache DOM elements
+const listEl = document.getElementById('module-list');
+const gridsContainer = document.getElementById('grids');
+const tabsContainer = document.getElementById('tabs-container');
+const addTabBtn = document.getElementById('add-tab');
+const sidebarEl = document.getElementById('sidebar');
+const sidebarToggle = document.getElementById('sidebar-toggle');
+const rootBtn = document.getElementById('select-root');
+const settingsBtn = document.getElementById('open-settings');
+const settingsModal = document.getElementById('settings-modal');
+const closeSettingsBtn = document.getElementById('close-settings');
+const saveSettingsBtn = document.getElementById('save-settings');
+// Settings inputs
+const inputAppBg = document.getElementById('setting-app-bg');
+const inputBorderColor = document.getElementById('setting-border-color');
+const inputButtonBg = document.getElementById('setting-button-bg');
+const inputButtonText = document.getElementById('setting-button-text');
+const inputTopBarBg = document.getElementById('setting-topbar-bg');
+const inputTabActiveBg = document.getElementById('setting-tab-active-bg');
+const inputTabActiveText = document.getElementById('setting-tab-active-text');
+const inputTabInactiveBg = document.getElementById('setting-tab-inactive-bg');
+const inputTabInactiveText = document.getElementById('setting-tab-inactive-text');
+const inputSidebarBg = document.getElementById('setting-sidebar-bg');
+const inputSidebarText = document.getElementById('setting-sidebar-text');
+const inputGridHint = document.getElementById('setting-grid-hint');
+const inputModuleBg = document.getElementById('setting-module-bg');
+const inputTextColor = document.getElementById('setting-text-color');
+const inputBorderRadius = document.getElementById('setting-border-radius');
+const inputModuleHeaderBg = document.getElementById('setting-module-header-bg');
+const inputModuleHeaderText = document.getElementById('setting-module-header-text');
+const inputDangerBg = document.getElementById('setting-danger-bg');
+const inputDangerText = document.getElementById('setting-danger-text');
+
+// New module border and sidebar module card inputs
+const inputModuleBorderColor = document.getElementById('setting-module-border-color');
+const inputSidebarModuleBg = document.getElementById('setting-sidebar-module-bg');
+const inputSidebarModuleText = document.getElementById('setting-sidebar-module-text');
+const inputSidebarModuleBorder = document.getElementById('setting-sidebar-module-border');
+
+// Navigation buttons for settings
+const settingsNavButtons = document.querySelectorAll('.settings-nav button');
+
+// Remember the selected root folder across sessions
+const FS_HANDLE_KEY = 'rootDirHandle';
+
+function idbOpen() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open('modulesApp', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('fs-handles');
+    req.onsuccess = () => res(req.result);
+    req.onerror = () => rej(req.error);
+  });
+}
+async function idbSet(key, val){
+  const db = await idbOpen();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('fs-handles','readwrite');
+    tx.objectStore('fs-handles').put(val, key);
+    tx.oncomplete = () => res();
+    tx.onerror = () => rej(tx.error);
+  });
+}
+async function idbGet(key){
+  const db = await idbOpen();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('fs-handles','readonly');
+    const req = tx.objectStore('fs-handles').get(key);
+    req.onsuccess = () => res(req.result || null);
+    req.onerror = () => rej(req.error);
+  });
+}
+async function idbDel(key){
+  const db = await idbOpen();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('fs-handles','readwrite');
+    tx.objectStore('fs-handles').delete(key);
+    tx.oncomplete = () => res();
+    tx.onerror = () => rej(tx.error);
+  });
+}
+async function ensureRWPermission(handle){
+  if (typeof handle?.queryPermission !== 'function') return true;
+  const q = await handle.queryPermission({ mode: 'readwrite' });
+  if (q === 'granted') return true;
+  const r = await handle.requestPermission({ mode: 'readwrite' });
+  return r === 'granted';
+}
+async function tryRestoreRootHandle(){
+  if (!('showDirectoryPicker' in window)) return false;
+  try {
+    const h = await idbGet(FS_HANDLE_KEY);
+    if (!h) return false;
+    const ok = await ensureRWPermission(h);
+    if (!ok) return false;
+
+    rootDirHandle = h;
+    window.rootDirHandle = h;
+    rootBtn.textContent = h.name;
+    rootBtn.classList.remove('bg-blue-600','hover:bg-blue-700','text-white');
+    rootBtn.classList.add('bg-gray-300','hover:bg-gray-400','text-gray-800');
+
+    await loadModulesFromRoot(h);
+    await loadAppSettings();
+    applySettings();
+    await loadAndInitTabs();
+    return true;
+  } catch (e) {
+    console.warn('Restore root handle failed:', e);
+    return false;
+  }
+}
+
+
+document.addEventListener('DOMContentLoaded', async () => {
+  // Initialize sidebar collapsed state
+  sidebarEl.classList.add('collapsed');
+  // Trigger fade-in animation on initial load
+  document.body.classList.add('fade-in');
+
+  // Sidebar toggle
+  sidebarToggle.addEventListener('click', () => {
+    isSidebarOpen = !isSidebarOpen;
+    sidebarEl.classList.toggle('collapsed', !isSidebarOpen);
+    updateModuleDraggable();
+    updateGridDraggable();
   });
 
-  // === Folder selection ===
-  document.getElementById('select-root').addEventListener('click', async () => {
+  // Folder selection
+  rootBtn.addEventListener('click', async () => {
     if (window.showDirectoryPicker) {
       try {
         rootDirHandle = await window.showDirectoryPicker();
-        pathEl.innerHTML = 'Root: <em>' + rootDirHandle.name + '</em>';
+        window.rootDirHandle = rootDirHandle;                      // expose
+        rootBtn.textContent = rootDirHandle.name;
+        await idbSet(FS_HANDLE_KEY, rootDirHandle);                // persist handle
+        localStorage.setItem('rememberRootMeta', JSON.stringify({  // optional UI hint
+          name: rootDirHandle.name, ts: Date.now()
+        }));
+        rootBtn.classList.remove('bg-blue-600','hover:bg-blue-700','text-white');
+        rootBtn.classList.add('bg-gray-300','hover:bg-gray-400','text-gray-800');
         await loadModulesFromRoot(rootDirHandle);
+        await loadAppSettings();
+        applySettings();
+        await loadAndInitTabs();
+        // ensure grid state reflects current sidebar state
+        updateModuleDraggable();
+        updateGridDraggable();
       } catch (e) {
         console.warn(e);
         alert('Ordnerauswahl abgebrochen oder nicht erlaubt.');
       }
     } else {
-      // Fallback for browsers without File System Access API
       const inp = document.getElementById('folder-input');
-      inp.onchange = async (e) => {
+      inp.onchange = async e => {
         const files = Array.from(e.target.files);
         if (!files.length) return;
+        window.rootDirHandle = null;                // not reusable
+        await idbDel(FS_HANDLE_KEY);                // forget saved handle
+        localStorage.removeItem('rememberRootMeta');
         const any = files[0];
         const parts = any.webkitRelativePath.split('/');
         const rootName = parts[0];
-        pathEl.innerHTML = 'Root: <em>' + rootName + '</em>';
+        rootBtn.textContent = rootName;
+        rootBtn.classList.remove('bg-blue-600','hover:bg-blue-700','text-white');
+        rootBtn.classList.add('bg-gray-300','hover:bg-gray-400','text-gray-800');
         await loadModulesFromFileList(files, rootName);
+        await loadAndInitTabs();
         inp.value = null;
+        updateModuleDraggable();
+        updateGridDraggable();
       };
       inp.click();
     }
   });
 
-  // === Module discovery (File System Access API) ===
-  async function loadModulesFromRoot(rootHandle) {
-    try {
-      modulesDirHandle = await rootHandle.getDirectoryHandle('modules', { create: false });
-    } catch {
-      liveModuleTemplates = [];
-      renderSidebar([]);
-      alert('Kein "modules" Unterordner im gewählten Root gefunden.');
-      return;
-    }
-    const templates = [];
-    for await (const entry of modulesDirHandle.values()) {
-      if (entry.kind !== 'directory') continue;
-      const dirHandle = entry;
-      let moduleJson = null;
-      const attachments = [];
-      for await (const fileEntry of dirHandle.values()) {
-        if (fileEntry.kind === 'file') {
-          if (fileEntry.name.endsWith('.json')) {
-            const f = await fileEntry.getFile();
-            try { moduleJson = JSON.parse(await f.text()); } catch {}
-          } else {
-            attachments.push(fileEntry.name);
-          }
-        }
-      }
-      if (moduleJson) {
-        templates.push({ template: moduleJson, subdir: entry.name, attachments, dirHandle });
-      }
-    }
-    liveModuleTemplates = templates;
-    renderSidebar(templates);
-  }
+  // Add new tab
+  addTabBtn.addEventListener('click', () => {
+    const name = prompt('Name für neuen Tab:', 'Neuer Tab');
+    if (!name) return;
+    createTab(name);
+    renderTabs();
+    activateTab(tabs.length - 1);
+    updateModuleDraggable();
+    updateGridDraggable();
+    saveLayout();
+  });
 
-  // === Module discovery (fallback) from a FileList ===
-  async function loadModulesFromFileList(files, rootName) {
-    const byDir = new Map();
-    for (const f of files) {
-      const rel = f.webkitRelativePath;
-      const parts = rel.split('/');
-      if (parts.length < 3) continue;
-      if (parts[0] !== rootName || parts[1] !== 'modules') continue;
-      const moduleDir = parts[2];
-      if (!byDir.has(moduleDir)) byDir.set(moduleDir, []);
-      byDir.get(moduleDir).push(f);
+  // Settings open
+  settingsBtn.addEventListener('click', () => {
+    originalSettings = JSON.parse(JSON.stringify(appSettings));
+    populateInputsFromSettings();
+    settingsModal.classList.remove('hidden');
+  });
+  // Settings cancel
+  closeSettingsBtn.addEventListener('click', () => {
+    settingsModal.classList.add('hidden');
+    if (typeof originalSettings !== 'undefined') {
+      appSettings = { ...originalSettings };
+      applySettings();
+      renderTabs();
     }
-    const templates = [];
-    for (const [subdir, list] of byDir.entries()) {
-      let moduleJson = null;
-      const attachments = [];
-      for (const file of list) {
-        if (file.name.endsWith('.json')) {
-          try { moduleJson = JSON.parse(await file.text()); } catch {}
-        } else {
-          attachments.push(file.name);
-        }
-      }
-      if (moduleJson) {
-        templates.push({ template: moduleJson, subdir, attachments, fileList: list });
-      }
-    }
-    liveModuleTemplates = templates;
-    renderSidebar(templates);
-  }
-
-  // === Sidebar rendering ===
-  function renderSidebar(templates) {
-    listEl.innerHTML = '';
-    if (!templates.length) {
-      listEl.innerHTML = '<div class="text-gray-400">Keine Module gefunden.</div>';
-      return;
-    }
-    templates.forEach((modObj, idx) => {
-      const { template, subdir, attachments } = modObj;
-      const card = document.createElement('div');
-      card.className = 'module-card bg-white border rounded p-3 cursor-grab shadow hover:bg-blue-50 transition';
-      card.draggable = true;
-      card.innerHTML = `
-        <div class="flex items-center gap-2">
-          ${template.icon ? `<span class="text-xl">${template.icon}</span>` : ''}
-          <span class="font-semibold">${template.name || subdir}</span>
-          <span class="ml-2 text-xs text-gray-400">${subdir}</span>
-        </div>
-        ${attachments?.length ? `<div class="text-xs text-blue-700 mt-1">📎 ${attachments.join(', ')}</div>` : ''}`;
-
-      card.addEventListener('dragstart', (e) => {
-        // cross-browser: include text/plain as well as a custom type
-        e.dataTransfer.effectAllowed = 'copy';
-        e.dataTransfer.setData('text/plain', String(idx));
-        e.dataTransfer.setData('application/x-module-index', String(idx));
-        card.classList.add('dragging');
-      });
-      card.addEventListener('dragend', () => card.classList.remove('dragging'));
-      listEl.appendChild(card);
+  });
+  // Settings save
+  saveSettingsBtn.addEventListener('click', async () => {
+    readInputsIntoSettings();
+    applySettings();
+    await saveAppSettings();
+    settingsModal.classList.add('hidden');
+    renderTabs();
+  });
+  // Settings nav
+  settingsNavButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      settingsNavButtons.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const target = btn.dataset.section;
+      document.querySelectorAll('.settings-section').forEach(sec => sec.classList.remove('active'));
+      document.getElementById('section-' + target).classList.add('active');
     });
+  });
+  // Live preview for colours
+  [inputAppBg,inputBorderColor,inputButtonBg,inputButtonText,inputTopBarBg,inputTabActiveBg,inputTabActiveText,inputTabInactiveBg,inputTabInactiveText,inputSidebarBg,inputSidebarText,inputGridHint,inputModuleBg,inputTextColor,inputModuleHeaderBg,inputModuleHeaderText,inputDangerBg,inputDangerText,inputModuleBorderColor,inputSidebarModuleBg,inputSidebarModuleText,inputSidebarModuleBorder].forEach(inp => {
+    inp.addEventListener('input', () => {
+      readInputsIntoSettings();
+      applySettings();
+      renderTabs();
+    });
+  });
+  inputBorderRadius.addEventListener('input', () => {
+    appSettings.moduleBorderRadius = ((parseFloat(inputBorderRadius.value)||0)/16) + 'rem';
+    applySettings();
+  });
+
+  /* First tab on initial load */
+  createTab('Standard');
+  renderTabs();
+  activateTab(0);
+  updateModuleDraggable();
+  updateGridDraggable();
+
+  // --- Try to restore AFTER wiring handlers ---
+  const restored = await tryRestoreRootHandle();
+  if (!restored) {
+    // no-op; first-run already set up above
+  } else {
+    // Make sure grids reflect current sidebar state on restored sessions
+    updateModuleDraggable();
+    updateGridDraggable();
+  }
+});
+
+/** Populate inputs from appSettings */
+function populateInputsFromSettings() {
+  inputAppBg.value = toColor(appSettings.appBgColor, inputAppBg.value);
+  inputBorderColor.value = toColor(appSettings.borderColor, inputBorderColor.value);
+  inputButtonBg.value = toColor(appSettings.buttonBg, inputButtonBg.value);
+  inputButtonText.value = toColor(appSettings.buttonText, inputButtonText.value);
+  inputTopBarBg.value = toColor(appSettings.topBarBg, inputTopBarBg.value);
+  inputTabActiveBg.value = toColor(appSettings.tabActiveBg, inputTabActiveBg.value);
+  inputTabActiveText.value = toColor(appSettings.tabActiveText, inputTabActiveText.value);
+  inputTabInactiveBg.value = toColor(appSettings.tabInactiveBg, inputTabInactiveBg.value);
+  inputTabInactiveText.value = toColor(appSettings.tabInactiveText, inputTabInactiveText.value);
+  inputSidebarBg.value = toColor(appSettings.sidebarBg, inputSidebarBg.value);
+  inputSidebarText.value = toColor(appSettings.sidebarText, inputSidebarText.value);
+  inputGridHint.value = toColor(appSettings.gridHint, inputGridHint.value);
+  inputModuleBg.value = toColor(appSettings.moduleBgColor, inputModuleBg.value);
+  inputTextColor.value = toColor(appSettings.textColor, inputTextColor.value);
+  inputBorderRadius.value = Math.round(parseFloat(appSettings.moduleBorderRadius) * 16 || 0);
+  inputModuleHeaderBg.value = toColor(appSettings.moduleHeaderBg, inputModuleHeaderBg.value);
+  inputModuleHeaderText.value = toColor(appSettings.moduleHeaderText, inputModuleHeaderText.value);
+  inputDangerBg.value = toColor(appSettings.dangerBg, inputDangerBg.value);
+  inputDangerText.value = toColor(appSettings.dangerText, inputDangerText.value);
+
+  // New module border and sidebar module card settings
+  if (inputModuleBorderColor) inputModuleBorderColor.value = toColor(appSettings.moduleBorderColor, inputModuleBorderColor.value);
+  if (inputSidebarModuleBg) inputSidebarModuleBg.value = toColor(appSettings.sidebarModuleCardBg, inputSidebarModuleBg.value);
+  if (inputSidebarModuleText) inputSidebarModuleText.value = toColor(appSettings.sidebarModuleCardText, inputSidebarModuleText.value);
+  if (inputSidebarModuleBorder) inputSidebarModuleBorder.value = toColor(appSettings.sidebarModuleCardBorder, inputSidebarModuleBorder.value);
+}
+
+/** Read inputs into appSettings */
+function readInputsIntoSettings() {
+  appSettings.appBgColor = inputAppBg.value;
+  appSettings.borderColor = inputBorderColor.value;
+  appSettings.buttonBg = inputButtonBg.value;
+  appSettings.buttonText = inputButtonText.value;
+  appSettings.topBarBg = inputTopBarBg.value;
+  appSettings.tabActiveBg = inputTabActiveBg.value;
+  appSettings.tabActiveText = inputTabActiveText.value;
+  appSettings.tabInactiveBg = inputTabInactiveBg.value;
+  appSettings.tabInactiveText = inputTabInactiveText.value;
+  appSettings.sidebarBg = inputSidebarBg.value;
+  appSettings.sidebarText = inputSidebarText.value;
+  appSettings.gridHint = inputGridHint.value;
+  appSettings.moduleBgColor = inputModuleBg.value;
+  appSettings.textColor = inputTextColor.value;
+  appSettings.moduleBorderRadius = ((parseFloat(inputBorderRadius.value)||0)/16) + 'rem';
+  appSettings.moduleHeaderBg = inputModuleHeaderBg.value;
+  appSettings.moduleHeaderText = inputModuleHeaderText.value;
+  appSettings.dangerBg = inputDangerBg.value;
+  appSettings.dangerText = inputDangerText.value;
+
+  // New module border and sidebar module card settings
+  appSettings.moduleBorderColor = inputModuleBorderColor.value;
+  appSettings.sidebarModuleCardBg = inputSidebarModuleBg.value;
+  appSettings.sidebarModuleCardText = inputSidebarModuleText.value;
+  appSettings.sidebarModuleCardBorder = inputSidebarModuleBorder.value;
+}
+
+/** Convert rgba to hex for colour inputs */
+function toColor(val, fallback) {
+  if (!val) return fallback;
+  if (/^#/.test(val)) return val;
+  const m = val.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+  if (m) {
+    const r = Number(m[1]).toString(16).padStart(2,'0');
+    const g = Number(m[2]).toString(16).padStart(2,'0');
+    const b = Number(m[3]).toString(16).padStart(2,'0');
+    return '#' + r + g + b;
+  }
+  return fallback;
+}
+
+/** Apply CSS variables from appSettings */
+function applySettings() {
+  document.documentElement.style.setProperty('--app-bg', appSettings.appBgColor);
+  document.documentElement.style.setProperty('--sidebar-bg', appSettings.sidebarBg);
+  document.documentElement.style.setProperty('--sidebar-text', appSettings.sidebarText);
+  document.documentElement.style.setProperty('--top-bar-bg', appSettings.topBarBg);
+  document.documentElement.style.setProperty('--button-bg', appSettings.buttonBg);
+  document.documentElement.style.setProperty('--button-text', appSettings.buttonText);
+  document.documentElement.style.setProperty('--border-color', appSettings.borderColor);
+  document.documentElement.style.setProperty('--module-bg', appSettings.moduleBgColor);
+  document.documentElement.style.setProperty('--text-color', appSettings.textColor);
+  document.documentElement.style.setProperty('--module-border-radius', appSettings.moduleBorderRadius);
+  document.documentElement.style.setProperty('--module-header-bg', appSettings.moduleHeaderBg);
+  document.documentElement.style.setProperty('--module-header-text', appSettings.moduleHeaderText);
+  document.documentElement.style.setProperty('--danger-bg', appSettings.dangerBg);
+  document.documentElement.style.setProperty('--danger-text', appSettings.dangerText);
+  document.documentElement.style.setProperty('--tab-active-bg', appSettings.tabActiveBg);
+  document.documentElement.style.setProperty('--tab-active-text', appSettings.tabActiveText);
+  document.documentElement.style.setProperty('--tab-inactive-bg', appSettings.tabInactiveBg);
+  document.documentElement.style.setProperty('--tab-inactive-text', appSettings.tabInactiveText);
+  document.documentElement.style.setProperty('--grid-hint', appSettings.gridHint);
+
+  // Apply module border and sidebar module card colours
+  document.documentElement.style.setProperty('--module-border-color', appSettings.moduleBorderColor);
+  document.documentElement.style.setProperty('--sidebar-module-card-bg', appSettings.sidebarModuleCardBg);
+  document.documentElement.style.setProperty('--sidebar-module-card-text', appSettings.sidebarModuleCardText);
+  document.documentElement.style.setProperty('--sidebar-module-card-border', appSettings.sidebarModuleCardBorder);
+}
+
+/** Save settings to storage */
+async function saveAppSettings() {
+  if (rootDirHandle && window.showDirectoryPicker) {
+    try {
+      const fileHandle = await rootDirHandle.getFileHandle(settingsFileName, { create: true });
+      const writable = await fileHandle.createWritable();
+      await writable.write(JSON.stringify(appSettings));
+      await writable.close();
+    } catch (e) { console.warn('Konnte Einstellungsdatei nicht speichern', e); }
+  } else {
+    try {
+      localStorage.setItem('appSettings', JSON.stringify(appSettings));
+    } catch (e) { console.warn('Konnte Einstellungen nicht im localStorage speichern', e); }
+  }
+}
+
+/** Load settings from storage */
+async function loadAppSettings() {
+  if (rootDirHandle && window.showDirectoryPicker) {
+    try {
+      const fileHandle = await rootDirHandle.getFileHandle(settingsFileName, { create: false });
+      const file = await fileHandle.getFile();
+      const text = await file.text();
+      const loaded = JSON.parse(text);
+      if (loaded) appSettings = { ...appSettings, ...loaded };
+    } catch (e) {}
+  } else {
+    try {
+      const ls = localStorage.getItem('appSettings');
+      if (ls) appSettings = { ...appSettings, ...JSON.parse(ls) };
+    } catch (e) {}
+  }
+  applySettings();
+}
+
+/** Update card draggability */
+function updateModuleDraggable() {
+  listEl.querySelectorAll('.module-card').forEach(card => {
+    card.draggable = isSidebarOpen;
+    card.style.webkitUserDrag = isSidebarOpen ? 'element' : 'none';
+    card.style.cursor = isSidebarOpen ? 'grab' : 'default';
+    const delBtn = card.querySelector('.mod-delete');
+    if (delBtn) delBtn.style.display = isSidebarOpen ? '' : 'none';
+  });
+}
+function updateGridDraggable() {
+  tabs.forEach(tab => {
+    if (tab.grid) {
+      // grid-wide static mode reflects sidebar state
+      tab.grid.setStatic(!isSidebarOpen);
+      tab.grid.engine.nodes.forEach(node => {
+        tab.grid.movable(node.el, isSidebarOpen);
+        tab.grid.resizable(node.el, isSidebarOpen);
+        const dragHandle = node.el.querySelector('.drag-handle');
+        if (dragHandle) dragHandle.style.cursor = isSidebarOpen ? 'move' : 'default';
+        const delBtn = node.el.querySelector('.remove');
+        if (delBtn) delBtn.style.display = isSidebarOpen ? '' : 'none';
+        const resizeHandles = node.el.querySelectorAll('.ui-resizable-handle');
+        resizeHandles.forEach(handle => {
+          handle.style.display = isSidebarOpen ? '' : 'none';
+          if (!isSidebarOpen) handle.style.cursor = 'default';
+        });
+      });
+    }
+  });
+}
+
+/** Load modules via FS API */
+async function loadModulesFromRoot(rootHandle) {
+  try {
+    modulesDirHandle = await rootHandle.getDirectoryHandle('modules', { create: false });
+  } catch {
+    liveModuleTemplates = [];
+    renderSidebar([]);
+    alert('Kein "modules" Unterordner im gewählten Root gefunden.');
+    return;
+  }
+  const templates = [];
+  for await (const entry of modulesDirHandle.values()) {
+    if (entry.kind !== 'directory') continue;
+    const dirHandle = entry;
+    let moduleJson = null;
+    const attachments = [];
+    for await (const fileEntry of dirHandle.values()) {
+      if (fileEntry.kind === 'file') {
+        if (fileEntry.name.endsWith('.json')) {
+          const f = await fileEntry.getFile();
+          try { moduleJson = JSON.parse(await f.text()); } catch {}
+        } else {
+          attachments.push(fileEntry.name);
+        }
+      }
+    }
+    if (moduleJson) templates.push({ template: moduleJson, subdir: entry.name, attachments, dirHandle });
+  }
+  liveModuleTemplates = templates;
+  renderSidebar(templates);
+
+  // Apply a fade-in animation to grids container when modules load
+  if (gridsContainer) {
+    gridsContainer.classList.add('fade-in');
+    setTimeout(() => gridsContainer.classList.remove('fade-in'), 600);
+  }
+}
+
+/** Fallback load modules via file list */
+async function loadModulesFromFileList(files, rootName) {
+  const byDir = new Map();
+  for (const f of files) {
+    const rel = f.webkitRelativePath;
+    const parts = rel.split('/');
+    if (parts.length < 3) continue;
+    if (parts[0] !== rootName || parts[1] !== 'modules') continue;
+    const moduleDir = parts[2];
+    if (!byDir.has(moduleDir)) byDir.set(moduleDir, []);
+    byDir.get(moduleDir).push(f);
+  }
+  const templates = [];
+  for (const [subdir, list] of byDir.entries()) {
+    let moduleJson = null;
+    const attachments = [];
+    for (const file of list) {
+      if (file.name.endsWith('.json')) {
+        try { moduleJson = JSON.parse(await file.text()); } catch {}
+      } else {
+        attachments.push(file.name);
+      }
+    }
+    if (moduleJson) templates.push({ template: moduleJson, subdir, attachments, fileList: list });
+  }
+  liveModuleTemplates = templates;
+  renderSidebar(templates);
+
+  // Apply fade-in to grids container when modules load via fallback
+  if (gridsContainer) {
+    gridsContainer.classList.add('fade-in');
+    setTimeout(() => gridsContainer.classList.remove('fade-in'), 600);
+  }
+}
+
+/** Render sidebar module cards */
+function renderSidebar(templates) {
+  listEl.innerHTML = '';
+  if (!templates.length) {
+    listEl.innerHTML = '<div class="text-gray-400">Keine Module gefunden.</div>';
+    return;
+  }
+  templates.forEach(modObj => {
+    const { template, subdir, attachments } = modObj;
+    const card = document.createElement('div');
+    card.className = 'module-card rounded p-3 cursor-grab shadow transition flex flex-col';
+    card.dataset.subdir = subdir;
+    // header
+    const header = document.createElement('div');
+    header.className = 'flex items-center gap-2';
+    if (template.icon) {
+      const iconSpan = document.createElement('span');
+      iconSpan.className = 'text-xl';
+      iconSpan.textContent = template.icon;
+      header.appendChild(iconSpan);
+    }
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'font-semibold flex-1';
+    nameSpan.textContent = template.name || subdir;
+    header.appendChild(nameSpan);
+    const delBtn = document.createElement('button');
+    delBtn.className = 'mod-delete text-red-600 hover:text-red-800 ml-auto';
+    delBtn.title = 'Modul aus der Liste entfernen';
+    delBtn.textContent = '🗑';
+    delBtn.addEventListener('click', ev => {
+      ev.stopPropagation();
+      deleteModule(subdir);
+    });
+    header.appendChild(delBtn);
+    card.appendChild(header);
+    if (attachments?.length) {
+      const att = document.createElement('div');
+      att.className = 'sidebar-module-attachment mt-1';
+      att.textContent = '📎 ' + attachments.join(', ');
+      card.appendChild(att);
+    }
+    card.draggable = isSidebarOpen;
+    card.addEventListener('dragstart', e => {
+      if (!isSidebarOpen) {
+        e.preventDefault(); return;
+      }
+      e.dataTransfer.effectAllowed = 'copy';
+      e.dataTransfer.setData('text/plain', subdir);
+      e.dataTransfer.setData('application/x-module-subdir', subdir);
+      card.classList.add('dragging');
+    });
+    card.addEventListener('dragend', () => card.classList.remove('dragging'));
+    listEl.appendChild(card);
+  });
+  updateModuleDraggable();
+}
+
+/** Delete module from sidebar array */
+function deleteModule(subdir) {
+  const idx = liveModuleTemplates.findIndex(t => t.subdir === subdir);
+  if (idx >= 0) {
+    liveModuleTemplates.splice(idx, 1);
+    renderSidebar(liveModuleTemplates);
+  }
+}
+
+/** Reset and recreate tabs using saved layout */
+async function loadAndInitTabs() {
+  resetTabs();
+  const saved = await loadLayout();
+
+  // Seed used IDs and counter from saved layout
+  usedInstanceIds = new Set();
+  nextModuleInstanceId = 1;
+  if (saved && saved.length) {
+    for (const t of saved) {
+      for (const m of (t.modules || [])) {
+        if (m.id) {
+          usedInstanceIds.add(m.id);
+          const num = /^mod-(\d+)$/.exec(m.id)?.[1];
+          if (num) nextModuleInstanceId = Math.max(nextModuleInstanceId, Number(num) + 1);
+        }
+      }
+    }
   }
 
-  // === Drag from sidebar into grid ===
-  gridEl.addEventListener('dragover', (e) => {
+  if (saved && saved.length) {
+    for (const tabData of saved) createTab(tabData.name, tabData.modules);
+  } else {
+    createTab('Standard');
+  }
+  renderTabs();
+  activateTab(0);
+
+  // ensure initial state reflects current sidebar state
+  updateModuleDraggable();
+  updateGridDraggable();
+}
+
+/** Create a tab and grid */
+function createTab(name, layoutModules = []) {
+  const tabIndex = tabs.length;
+  const tab = { name: name || ('Tab ' + (tabIndex + 1)), modules: [], grid: null, el: null };
+  const gridEl = document.createElement('div');
+  gridEl.className = 'grid-stack p-4';
+  gridEl.style.minHeight = 'calc(100vh - 40px)';
+  gridEl.dataset.tabIndex = tabIndex;
+  gridsContainer.appendChild(gridEl);
+
+  const gridInstance = GridStack.init({ cellHeight: 100, margin: 5, handle: '.grid-stack-item-content', column: 12, float: true, minRow: 8 }, gridEl);
+
+  // Reflect current sidebar state immediately (no drag/resize when closed)
+  gridInstance.setStatic(!isSidebarOpen);
+
+  tab.grid = gridInstance;
+  tab.el = gridEl;
+  tabs.push(tab);
+  gridInstance.on('change', () => updateModulesPositions(tabIndex));
+
+  gridEl.addEventListener('dragover', e => {
+    if (!isSidebarOpen) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'copy';
     gridEl.classList.add('grid-drop-hint');
   });
   gridEl.addEventListener('dragleave', () => gridEl.classList.remove('grid-drop-hint'));
-  gridEl.addEventListener('drop', async (e) => {
+  gridEl.addEventListener('drop', async e => {
+    if (!isSidebarOpen) return;
     e.preventDefault();
     gridEl.classList.remove('grid-drop-hint');
-
-    // Retrieve index from either custom type or text/plain (Safari)
-    let idx = e.dataTransfer.getData('application/x-module-index');
-    if (idx === '' || idx == null) idx = e.dataTransfer.getData('text/plain');
-    const i = Number.parseInt(idx, 10);
-    if (Number.isNaN(i)) return;
-
-    const modObj = liveModuleTemplates[i];
+    let subdir = e.dataTransfer.getData('application/x-module-subdir');
+    if (!subdir) subdir = e.dataTransfer.getData('text/plain');
+    if (!subdir) return;
+    const modObj = liveModuleTemplates.find(m => m.subdir === subdir);
     if (!modObj) return;
-
     const rect = gridEl.getBoundingClientRect();
-    const cell = grid.getCellFromPixel({
-      left: e.clientX - rect.left,
-      top: e.clientY - rect.top
-    });
-
+    const cell = gridInstance.getCellFromPixel({ left: e.clientX - rect.left, top: e.clientY - rect.top });
     const tmpl = modObj.template;
+    const w = parseInt(tmpl.w) || 6;
+    const h = parseInt(tmpl.h) || 3;
+    const pos = { x: cell.x, y: cell.y, w, h };
+    // Generate unique instance id for this drop
+    const instanceId = generateInstanceId();
     if (tmpl.script) {
-      // Heuristic for js file name
-      const base = String(tmpl.script).replace(/^render/, '');
-      const candidates = (modObj.attachments || []).filter(n => n.endsWith('.js'));
-      const jsFileName = candidates.find(n => n.replace(/\.js$/, '') === base) || candidates[0];
-      if (!jsFileName) {
-        alert('Kein Modul-JS gefunden für: ' + (tmpl.name || modObj.subdir));
-        return;
-      }
-      await loadAndRunModuleScript(jsFileName, tmpl, modObj, cell);
+      const jsFileName = findScriptFileName(tmpl, modObj);
+      if (!jsFileName) { alert('Kein Modul-JS gefunden für: ' + (tmpl.name || modObj.subdir)); return; }
+      await loadAndRunModuleScript(jsFileName, tmpl, modObj, pos, gridInstance, tabIndex, instanceId);
     } else if (tmpl.fields) {
-      createUniversalModule(tmpl, cell, modObj);
+      createUniversalModule(tmpl, pos, modObj, gridInstance, tabIndex, instanceId);
     } else {
-      createSimpleModule(tmpl.name || modObj.subdir, cell);
+      createSimpleModule(tmpl.name || modObj.subdir, pos, gridInstance, tabIndex, modObj.subdir, instanceId);
     }
   });
 
-  // === Script module loader ===
-  async function loadAndRunModuleScript(jsFileName, moduleJson, modObj, gridPos) {
-    let jsText = '';
-    if (modObj.dirHandle) {
-      const jsHandle = await modObj.dirHandle.getFileHandle(jsFileName);
-      jsText = await (await jsHandle.getFile()).text();
-    } else if (modObj.fileList) {
-      const f = modObj.fileList.find(f => f.name === jsFileName);
-      if (!f) { alert('JS-Datei nicht gefunden (Fallback).'); return; }
-      jsText = await f.text();
-    } else {
-      alert('Keine Quelle für JS-Datei gefunden.');
-      return;
-    }
-
-    try { eval(jsText); } catch (e) { console.error(e); alert('Fehler im Modul-JS.'); return; }
-
-    const el = document.createElement('div');
-    el.classList.add('grid-stack-item');
-    el.innerHTML = `<div class="grid-stack-item-content">
-      <div class="drag-handle">
-        <span class="font-semibold">${moduleJson.name || modObj.subdir}</span>
-        <button class="remove bg-red-500 hover:bg-red-600 text-white px-2 py-1 text-xs rounded">🗑</button>
-      </div>
-      <div class="content"></div>
-    </div>`;
-    grid.addWidget(el, gridPos || { x:0, y:0, w:6, h:3 });
-
-    el.querySelector('.remove').onclick = () => grid.removeWidget(el);
-
-    if (typeof window[moduleJson.script] === 'function') {
-      window[moduleJson.script](el.querySelector('.content'), {
-        moduleJson,
-        attachments: modObj.attachments || [],
-        subdir: modObj.subdir
-      });
-    } else {
-      alert('Exportierte Funktion nicht gefunden: ' + moduleJson.script);
-    }
-  }
-
-  // === Universal (fields) module ===
-  function createUniversalModule(mod, pos, modObj) {
-    const el = document.createElement('div');
-    el.classList.add('grid-stack-item');
-    const color = mod.color || '#005983';
-    let html = `<div class="grid-stack-item-content" style="background:${color}">`;
-    html += `<div class="drag-handle"><span class="font-semibold">${mod.name || modObj.subdir}</span><button class="remove bg-red-500 hover:bg-red-600 text-white px-2 py-1 text-xs rounded">🗑</button></div>`;
-    html += `<form class="unimod-form grid grid-cols-2 gap-3">`;
-    (mod.fields || []).forEach(field => {
-      const colSpan = field.width === 2 ? 'col-span-2' : 'col-span-1';
-      html += `<label class="${colSpan} text-sm flex flex-col gap-1">`;
-      html += `<span class="font-medium">${field.label || field.key}</span>`;
-      if (field.type === 'textarea') {
-        html += `<textarea name="${field.key}" class="w-full text-black p-1 rounded"></textarea>`;
-      } else if (field.type === 'select') {
-        html += `<select name="${field.key}" class="w-full text-black p-1 rounded">` +
-                (field.options||[]).map(o=>`<option>${o}</option>`).join('') +
-                `</select>`;
-      } else {
-        html += `<input type="${field.type||'text'}" name="${field.key}" class="w-full text-black p-1 rounded" />`;
+  if (layoutModules && layoutModules.length) {
+    setTimeout(async () => {
+      for (const m of layoutModules) {
+        const modObj = liveModuleTemplates.find(t => t.subdir === m.subdir);
+        const pos = { x: m.x || 0, y: m.y || 0, w: m.w || 6, h: m.h || 3 };
+        // Use stored id if available; otherwise generate a new one
+        const instanceId = m.id || generateInstanceId();
+        if (modObj && modObj.template) {
+          const tmpl = modObj.template;
+          if (m.type === 'script' && tmpl.script) {
+            const jsFileName = findScriptFileName(tmpl, modObj);
+            if (jsFileName) await loadAndRunModuleScript(jsFileName, tmpl, modObj, pos, gridInstance, tabIndex, instanceId);
+          } else if (m.type === 'fields' && tmpl.fields) {
+            createUniversalModule(tmpl, pos, modObj, gridInstance, tabIndex, instanceId);
+          } else {
+            createSimpleModule(tmpl.name || modObj.subdir, pos, gridInstance, tabIndex, modObj.subdir, instanceId);
+          }
+        } else {
+          createSimpleModule(m.subdir, pos, gridInstance, tabIndex, m.subdir, instanceId);
+        }
       }
-      html += `</label>`;
+    }, 50);
+  }
+  return tab;
+}
+
+/** Render tabs */
+function renderTabs() {
+  tabsContainer.innerHTML = '';
+  tabs.forEach((tab, idx) => {
+    const item = document.createElement('div');
+    item.className = 'tab-item flex items-center gap-1 px-3 py-1 rounded cursor-pointer';
+    if (idx === activeTabIndex) item.classList.add('tab-active'); else item.classList.add('tab-inactive','hover:opacity-90');
+    const label = document.createElement('span');
+    label.className = 'truncate max-w-xs';
+    label.textContent = tab.name;
+    item.appendChild(label);
+    const closeBtn = document.createElement('span');
+    closeBtn.className = 'close-btn text-base';
+    closeBtn.textContent = '×';
+    closeBtn.title = 'Tab löschen';
+    closeBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      if (!confirm('Tab wirklich löschen?')) return;
+      deleteTab(idx);
     });
-    html += `</form>`;
-    if (mod.actions?.length) {
-      html += `<div class="mt-2 flex flex-wrap gap-2">` +
-              mod.actions.map((a,i)=>`<button type="button" class="action-btn bg-indigo-500 hover:bg-indigo-600 text-white px-3 py-1 rounded text-sm" data-i="${i}">${a.label}</button>`).join('') +
-              `</div>`;
+    item.appendChild(closeBtn);
+    item.addEventListener('click', () => activateTab(idx));
+    tabsContainer.appendChild(item);
+  });
+}
+
+/** Activate a tab */
+function activateTab(idx) {
+  if (idx < 0 || idx >= tabs.length) return;
+  tabs.forEach((tab, i) => { if (tab.el) tab.el.style.display = (i === idx ? '' : 'none'); });
+  activeTabIndex = idx;
+  renderTabs();
+}
+
+/** Delete tab */
+function deleteTab(idx) {
+  if (tabs.length <= 1) { alert('Mindestens ein Tab muss bestehen.'); return; }
+  const removed = tabs.splice(idx,1)[0];
+  if (removed && removed.el && removed.el.parentNode) removed.el.parentNode.removeChild(removed.el);
+  if (activeTabIndex >= idx) activeTabIndex = Math.max(0, activeTabIndex - 1);
+  renderTabs();
+  activateTab(activeTabIndex);
+  saveLayout();
+}
+
+/** Remove all tabs */
+function resetTabs() {
+  tabs.forEach(tab => { if (tab.el && tab.el.parentNode) tab.el.parentNode.removeChild(tab.el); });
+  tabs = [];
+  tabsContainer.innerHTML = '';
+}
+
+/** Update module positions after drag/resizing */
+function updateModulesPositions(index) {
+  const tab = tabs[index];
+  if (!tab || !tab.grid) return;
+  tab.modules = tab.grid.engine.nodes.map(node => {
+    const subdir = node.el.dataset.subdir;
+    const type = node.el.dataset.modType;
+    let instanceId = node.el.dataset.instanceId;
+    if (!instanceId) {
+      instanceId = generateInstanceId();
+      node.el.dataset.instanceId = instanceId;
+    } else {
+      usedInstanceIds.add(instanceId);
     }
-    html += `</div>`;
-    el.innerHTML = html;
-    grid.addWidget(el, pos || { x:0, y:0, w:6, h:3 });
+    return { id: instanceId, subdir, type, x: node.x, y: node.y, w: node.w, h: node.h };
+  });
+  saveLayout();
+}
 
-    el.querySelector('.remove').onclick = () => grid.removeWidget(el);
+/** Save layout */
+async function saveLayout() {
+  const layoutData = { tabs: tabs.map(({name, modules}) => ({ name, modules })) };
+  if (rootDirHandle && window.showDirectoryPicker) {
+    try {
+      const fileHandle = await rootDirHandle.getFileHandle(layoutFileName, { create: true });
+      const writable = await fileHandle.createWritable();
+      await writable.write(JSON.stringify(layoutData));
+      await writable.close();
+    } catch (e) { console.warn('Konnte Layout-Datei nicht speichern', e); }
+  } else {
+    try {
+      localStorage.setItem('modulesLayout', JSON.stringify(layoutData));
+    } catch (e) { console.warn('Konnte Layout nicht im localStorage speichern', e); }
+  }
+}
 
-    if (mod.actions?.length) {
-      el.querySelectorAll('.action-btn').forEach(btn => {
-        btn.onclick = () => {
-          const i = Number(btn.dataset.i);
-          const script = mod.actions[i].script;
-          if (!script) return;
-          runInlineScript(script, el.querySelector('form'), { modulename: mod.name || modObj.subdir });
-        };
-      });
+/** Load layout */
+async function loadLayout() {
+  if (rootDirHandle && window.showDirectoryPicker) {
+    try {
+      const fileHandle = await rootDirHandle.getFileHandle(layoutFileName, { create: false });
+      const file = await fileHandle.getFile();
+      const text = await file.text();
+      const obj = JSON.parse(text);
+      if (obj && Array.isArray(obj.tabs)) return obj.tabs;
+    } catch (e) {}
+  }
+  try {
+    const ls = localStorage.getItem('modulesLayout');
+    if (ls) {
+      const obj = JSON.parse(ls);
+      if (obj && Array.isArray(obj.tabs)) return obj.tabs;
     }
-  }
+  } catch (e) {}
+  return null;
+}
 
-  function runInlineScript(script, formEl, context) {
-    const fields = {};
-    Array.from(formEl.elements).forEach(el => { if (el.name) fields[el.name] = el; });
-    const helpers = {
-      exportAsCSV: (fields) => {
-        const row = Object.values(fields).map(f => (f && f.value || '')).join(';');
-        const blob = new Blob([row], {type:'text/csv'});
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = (context.modulename||'modul') + '.csv';
-        a.click();
-      }
-    };
-    const fn = new Function('fields', 'context', ...Object.keys(helpers), script);
-    try { fn(fields, context, ...Object.values(helpers)); } catch(e) { console.error(e); alert('Script-Fehler.'); }
-  }
+/** Determine script filename from module JSON */
+function findScriptFileName(moduleJson, modObj) {
+  const base = String(moduleJson.script).replace(/^render/, '');
+  const candidates = (modObj.attachments || []).filter(n => n.endsWith('.js'));
+  let jsFileName = candidates.find(n => n.replace(/\.js$/, '') === base);
+  if (!jsFileName) jsFileName = candidates[0];
+  return jsFileName;
+}
 
-  // === Simple module ===
-  function createSimpleModule(title, pos) {
-    const el = document.createElement('div');
-    el.classList.add('grid-stack-item');
-    el.innerHTML = `
-      <div class="grid-stack-item-content">
-        <div class="drag-handle">
-          <span class="font-semibold">${title}</span>
-          <button class="remove bg-red-500 hover:bg-red-600 text-white px-2 py-1 text-xs rounded">🗑</button>
-        </div>
-        <div class="text-sm opacity-80">Kein Script/Fields definiert.</div>
-      </div>`;
-    grid.addWidget(el, pos || { x:0, y:0, w:4, h:2 });
-    el.querySelector('.remove').onclick = () => grid.removeWidget(el);
+/** Load and run script module */
+async function loadAndRunModuleScript(jsFileName, moduleJson, modObj, gridPos, gridInstance, tabIndex, instanceIdArg) {
+  let jsText = '';
+  if (modObj.dirHandle) {
+    const jsHandle = await modObj.dirHandle.getFileHandle(jsFileName);
+    jsText = await (await jsHandle.getFile()).text();
+  } else if (modObj.fileList) {
+    const f = modObj.fileList.find(f => f.name === jsFileName);
+    if (!f) { alert('JS-Datei nicht gefunden (Fallback).'); return; }
+    jsText = await f.text();
+  } else {
+    alert('Keine Quelle für JS-Datei gefunden.');
+    return;
   }
-</script>
+  try { eval(jsText); } catch (e) { console.error(e); alert('Fehler im Modul-JS.'); return; }
+  const el = document.createElement('div');
+  el.classList.add('grid-stack-item');
+  el.innerHTML = `<div class="grid-stack-item-content relative">
+  <button class="remove gs-remove px-2 py-1 text-xs rounded">🗑</button>
+  <div class="content"></div>
+  </div>`;
+  el.dataset.subdir = modObj.subdir;
+  el.dataset.modType = 'script';
+  // Assign instance id
+  const instanceId = instanceIdArg || generateInstanceId();
+  usedInstanceIds.add(instanceId);
+  el.dataset.instanceId = instanceId;
+
+  const pos = gridPos || { x:0, y:0, w: moduleJson.w || 6, h: moduleJson.h || 3 };
+  const widgetOptions = {
+    ...pos,
+    minW: moduleJson.minW || 1,
+    minH: moduleJson.minH || 1
+  };
+  if (Number.isFinite(moduleJson.maxW)) widgetOptions.maxW = moduleJson.maxW;
+  if (Number.isFinite(moduleJson.maxH)) widgetOptions.maxH = moduleJson.maxH;
+  gridInstance.addWidget(el, widgetOptions);
+  el.querySelector('.remove').onclick = () => {
+    gridInstance.removeWidget(el);
+    updateModulesPositions(tabIndex);
+    updateGridDraggable();
+  };
+  if (typeof window[moduleJson.script] === 'function') {
+    window[moduleJson.script](el.querySelector('.content'), { moduleJson, attachments: modObj.attachments || [], subdir: modObj.subdir });
+  } else {
+    alert('Exportierte Funktion nicht gefunden: ' + moduleJson.script);
+  }
+  // Apply fade-in animation to new module content
+  try {
+    const contentEl = el.querySelector('.grid-stack-item-content');
+    if (contentEl) {
+      contentEl.classList.add('fade-in');
+      setTimeout(() => contentEl.classList.remove('fade-in'), 600);
+    }
+  } catch (e) {}
+  updateModulesPositions(tabIndex);
+  updateGridDraggable();
+}
+
+/** Create universal (fields) module */
+function createUniversalModule(mod, pos, modObj, gridInstance, tabIndex, instanceIdArg) {
+  const el = document.createElement('div');
+  el.classList.add('grid-stack-item');
+  const defaultW = parseInt(mod.w) || 6;
+  const defaultH = parseInt(mod.h) || 3;
+  const finalPos = { ...pos };
+  if (!pos || typeof pos.w === 'undefined') finalPos.w = defaultW;
+  if (!pos || typeof pos.h === 'undefined') finalPos.h = defaultH;
+  const bg = mod.color || appSettings.moduleBgColor;
+  let html = `<div class="grid-stack-item-content" style="background:${bg}">`;
+  html += `<div class="drag-handle"><span class="font-semibold">${mod.name || modObj.subdir}</span><button class="remove px-2 py-1 text-xs rounded">🗑</button></div>`;
+  html += `<form class="unimod-form grid grid-cols-2 gap-3">`;
+  (mod.fields || []).forEach(field => {
+    const colSpan = field.width === 2 ? 'col-span-2' : 'col-span-1';
+    html += `<label class="${colSpan} text-sm flex flex-col gap-1"><span class="font-medium">${field.label || field.key}</span>`;
+    if (field.type === 'textarea') {
+      html += `<textarea name="${field.key}" class="w-full text-black p-1 rounded"></textarea>`;
+    } else if (field.type === 'select') {
+      html += `<select name="${field.key}" class="w-full text-black p-1 rounded">` + (field.options || []).map(o => `<option>${o}</option>`).join('') + `</select>`;
+    } else {
+      html += `<input type="${field.type || 'text'}" name="${field.key}" class="w-full text-black p-1 rounded" />`;
+    }
+    html += `</label>`;
+  });
+  html += `</form>`;
+  if (mod.actions?.length) {
+    html += `<div class="mt-2 flex flex-wrap gap-2">` + mod.actions.map((a,i) => `<button type="button" class="action-btn bg-indigo-500 hover:bg-indigo-600 text-white px-3 py-1 rounded text-sm" data-i="${i}">${a.label}</button>`).join('') + `</div>`;
+  }
+  html += `</div>`;
+  el.innerHTML = html;
+  el.dataset.subdir = modObj.subdir;
+  el.dataset.modType = 'fields';
+  // Assign instance id
+  const instanceId = instanceIdArg || generateInstanceId();
+  usedInstanceIds.add(instanceId);
+  el.dataset.instanceId = instanceId;
+
+  const widgetOptions = {
+    ...(finalPos || { x:0,y:0,w:defaultW,h:defaultH }),
+    minW: mod.minW || 1,
+    minH: mod.minH || 1,
+    maxW: mod.maxW || finalPos.w,
+    maxH: mod.maxH || finalPos.h
+  };
+  gridInstance.addWidget(el, widgetOptions);
+  el.querySelector('.remove').onclick = () => {
+    gridInstance.removeWidget(el);
+    updateModulesPositions(tabIndex);
+    updateGridDraggable();
+  };
+  if (mod.actions?.length) {
+    el.querySelectorAll('.action-btn').forEach(btn => {
+      btn.onclick = () => {
+        const i = Number(btn.dataset.i);
+        const script = mod.actions[i].script;
+        if (!script) return;
+        runInlineScript(script, el.querySelector('form'), { modulename: mod.name || modObj.subdir });
+      };
+    });
+  }
+  // Apply fade-in animation to new universal module
+  try {
+    const contentEl = el.querySelector('.grid-stack-item-content');
+    if (contentEl) {
+      contentEl.classList.add('fade-in');
+      setTimeout(() => contentEl.classList.remove('fade-in'), 600);
+    }
+  } catch (e) {}
+  updateModulesPositions(tabIndex);
+  updateGridDraggable();
+}
+
+/** Run script for universal module */
+function runInlineScript(script, formEl, context) {
+  const fields = {};
+  Array.from(formEl.elements).forEach(el => { if (el.name) fields[el.name] = el; });
+  const helpers = {
+    exportAsCSV: fields => {
+      const row = Object.values(fields).map(f => (f && f.value || '')).join(';');
+      const blob = new Blob([row], { type:'text/csv' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = (context.modulename || 'modul') + '.csv';
+      a.click();
+    }
+  };
+  const fn = new Function('fields','context',...Object.keys(helpers), script);
+  try { fn(fields, context, ...Object.values(helpers)); } catch (e) { console.error(e); alert('Script-Fehler.'); }
+}
+
+/** Create simple module */
+function createSimpleModule(title, pos, gridInstance, tabIndex, subdir, instanceIdArg) {
+  const el = document.createElement('div');
+  el.classList.add('grid-stack-item');
+  const w = (pos && pos.w) || 4;
+  const h = (pos && pos.h) || 2;
+  el.innerHTML = `<div class="grid-stack-item-content relative">
+  <button class="remove gs-remove px-2 py-1 text-xs rounded">🗑</button>
+  <div class="text-sm opacity-80">Kein Script/Fields definiert.</div>
+  </div>`;
+  el.dataset.subdir = subdir || title;
+  el.dataset.modType = 'simple';
+  // Assign instance id
+  const instanceId = instanceIdArg || generateInstanceId();
+  usedInstanceIds.add(instanceId);
+  el.dataset.instanceId = instanceId;
+
+  gridInstance.addWidget(el, pos || { x:0, y:0, w, h });
+  el.querySelector('.remove').onclick = () => {
+    gridInstance.removeWidget(el);
+    updateModulesPositions(tabIndex);
+    updateGridDraggable();
+  };
+  // Apply fade-in animation to new simple module
+  try {
+    const contentEl = el.querySelector('.grid-stack-item-content');
+    if (contentEl) {
+      contentEl.classList.add('fade-in');
+      setTimeout(() => contentEl.classList.remove('fade-in'), 600);
+    }
+  } catch (e) {}
+  updateModulesPositions(tabIndex);
+  updateGridDraggable();
+}
+  </script>
 </body>
 </html>

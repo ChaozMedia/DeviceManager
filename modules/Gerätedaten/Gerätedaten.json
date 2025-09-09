@@ -1,0 +1,9 @@
+{
+  "name": "Gerätedaten",
+  "icon": "📋",
+  "script": "renderRecordSheet",
+  "minW": 2,
+  "minH": 2,
+  "w": 4,
+  "h": 4
+}

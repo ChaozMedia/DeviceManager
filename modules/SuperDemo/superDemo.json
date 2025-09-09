@@ -1,0 +1,17 @@
+{
+  "name": "Super Demo",
+  "icon": "🧪",
+  "description": "Showcase: forms, timers, chart, storage, CSV, clipboard, jQuery UI, GridStack resize, theme vars, attachments.",
+  "script": "renderSuperDemo",
+  "w": 5,
+  "h": 5,
+  "minW": 3,
+  "minH": 3,
+  "maxW": 12,
+  "maxH": 12,
+  "settings": {
+    "title": "Hello from JSON",
+    "defaultColor": "#22c55e",
+    "intervalMs": 500
+  }
+}

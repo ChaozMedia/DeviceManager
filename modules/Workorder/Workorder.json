@@ -1,0 +1,5 @@
+{
+  "name": "Workorder",
+  "icon": "📝",
+  "script": "renderWorkorderEditable"
+}

@@ -1,0 +1,8 @@
+{
+  "name": "Sample Module",
+  "icon": "⭐",
+  "script": "renderSampleModule",
+  "minW": 2,
+  "minH": 3,
+  "maxW": 4
+}

@@ -1,0 +1,5 @@
+{
+  "name": "Markdown-Viewer",
+  "icon": "📑",
+  "script": "renderMarkdownViewer"
+}

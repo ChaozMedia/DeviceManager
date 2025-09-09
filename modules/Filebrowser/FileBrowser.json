@@ -1,0 +1,5 @@
+{
+  "name": "Dateiexplorer",
+  "icon": "📁",
+  "script": "renderFileBrowser"
+}

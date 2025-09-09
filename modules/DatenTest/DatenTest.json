@@ -1,0 +1,12 @@
+{
+  "name": "DatenTest",
+  "icon": "📝",
+  "script": "renderTwoTextsGeneric",
+  "minW": 3,
+  "minH": 2,
+  "w": 4,
+  "h": 3,
+  "settings": {
+    "title": "DatenTest"
+  }
+}

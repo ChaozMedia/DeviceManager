@@ -1,0 +1,14 @@
+{
+  "name": "Temp: Aktives Gerät",
+  "icon": "🧩",
+  "script": "renderGlobalInputs",
+  "minW": 3,
+  "minH": 2,
+  "w": 4,
+  "h": 3,
+  "maxW": 100,
+  "maxH": 100,
+  "settings": {
+    "title": "Aktives Gerät"
+  }
+}

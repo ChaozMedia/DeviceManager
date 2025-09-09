@@ -1,0 +1,20 @@
+{
+  "name": "Workorder-Modul",
+  "icon": "🛠️",
+  "color": "#197C98",
+  "fields": [
+    { "type": "text", "label": "Workorder", "key": "workorder", "width": 1 },
+    { "type": "textarea", "label": "Reason for Removal", "key": "reason", "width": 2 },
+    { "type": "text", "label": "Notification", "key": "notification", "width": 1 },
+    { "type": "text", "label": "P/N", "key": "pn", "width": 1 },
+    { "type": "select", "label": "Status", "key": "status", "options": ["Confirmed", "Not Confirmed", "Surplus"], "width": 1 },
+    { "type": "text", "label": "S/N", "key": "sn", "width": 1 },
+    { "type": "textarea", "label": "Comments", "key": "comments", "width": 2 },
+    { "type": "text", "label": "Repair Order", "key": "repairOrder", "width": 1 },
+    { "type": "textarea", "label": "Auftragsinfo", "key": "auftrag", "width": 2 }
+  ],
+  "actions": [
+    { "label": "Export CSV", "script": "exportAsCSV(fields);" }
+  ],
+  "script": "// z.B. Validierung, Berechnung oder Lookup hier\n// Beispiel: if(fields.pn.value.length<5) fields.pn.style.background='pink';"
+}

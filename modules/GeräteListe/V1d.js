@@ -144,29 +144,35 @@
     await w.close();
   }
 
+  const DEFAULT_DICT_FIELDS = [
+    {key:'meldung', label:'Meldung'},
+    {key:'auftrag', label:'Auftrag'},
+    {key:'part',    label:'PartNo'},
+    {key:'serial',  label:'SerialNo'}
+  ];
+
   async function readDictFromHandle(handle){
     await ensureXLSX();
     const f = await handle.getFile();
-    if (f.size === 0) return {};
+    if (f.size === 0) return { map:{}, fields:DEFAULT_DICT_FIELDS };
     const buf = await f.arrayBuffer();
     const wb = XLSX.read(buf, { type:'array' });
     const ws = wb.Sheets['records'] || wb.Sheets[wb.SheetNames[0]];
-    if (!ws) return {};
+    if (!ws) return { map:{}, fields:DEFAULT_DICT_FIELDS };
     const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
-    const hdr = rows[0]?.map(h=>String(h||'').toLowerCase().trim()) || [];
-    const idx = {meldung:hdr.indexOf('meldung'),auftrag:hdr.indexOf('auftrag'),part:hdr.indexOf('part'),serial:hdr.indexOf('serial')};
+    const hdrRaw = rows[0]?.map(h=>String(h||'').trim()) || [];
+    const hdr = hdrRaw.map(h=>h.toLowerCase());
+    const idxM = hdr.indexOf('meldung');
     const map = {};
     rows.slice(1).forEach(r=>{
-      const m = String(r[idx.meldung]||'').trim();
+      const m = String(r[idxM]||'').trim();
       if(!m) return;
-      map[m] = {
-        meldung:m,
-        auftrag:String(r[idx.auftrag]||''),
-        part:String(r[idx.part]||''),
-        serial:String(r[idx.serial]||'')
-      };
+      const obj = {};
+      hdr.forEach((k,i)=>{ obj[k] = String(r[i]||''); });
+      map[m] = obj;
     });
-    return map;
+    const fields = hdrRaw.map((label,i)=>({key:hdr[i], label:label||hdr[i]}));
+    return { map, fields };
   }
 
   async function readNameRulesFromHandle(handle){
@@ -365,6 +371,7 @@
     let fileHandle = null;
     let dictHandle = null;
     let dictData = {};
+    let dictFields = DEFAULT_DICT_FIELDS.slice();
     let nameHandle = null;
     let nameRules = [];
     let items = []; // {id, meldung}
@@ -460,15 +467,31 @@
       updateHighlights();
     }
     function updateFieldOptions(){
-      const hasName = nameRules.length > 0;
       [els.selTitle, els.selSub].forEach(sel=>{
-        const exists = Array.from(sel.options).some(o=>o.value==='name');
-        if(hasName && !exists){ const opt=document.createElement('option');opt.value='name';opt.textContent='Name';sel.appendChild(opt); }
-        if(!hasName && exists){ Array.from(sel.options).forEach(o=>{if(o.value==='name')o.remove();}); }
+        sel.innerHTML='';
+        dictFields.forEach(f=>{
+          const opt=document.createElement('option');
+          opt.value=f.key;
+          opt.textContent=f.label;
+          sel.appendChild(opt);
+        });
+        if(nameRules.length>0){
+          const opt=document.createElement('option');
+          opt.value='name';
+          opt.textContent='Name';
+          sel.appendChild(opt);
+        }
       });
-      if(!hasName){ if(cfg.titleField==='name')cfg.titleField='meldung'; if(cfg.subField==='name')cfg.subField='auftrag'; }
+      const valid = dictFields.map(f=>f.key);
+      if(nameRules.length>0) valid.push('name');
+      if(!valid.includes(cfg.titleField)) cfg.titleField = valid[0] || 'meldung';
+      if(!valid.includes(cfg.subField) || cfg.subField===cfg.titleField){
+        const second = valid.find(v=>v!==cfg.titleField);
+        cfg.subField = second || cfg.titleField;
+      }
       els.selTitle.value = cfg.titleField;
       els.selSub.value = cfg.subField;
+      saveCfg(cfg);
     }
     function syncFromDOM(){
       items = Array.from(els.list.children).map(el => ({
@@ -526,7 +549,12 @@
       cfg.dictFileName = h.name || 'dictionary.xlsx';
       els.dictLabel.textContent = `• ${cfg.dictFileName}`;
       saveCfg(cfg);
-      try { dictData = await readDictFromHandle(h); } catch(e){ console.warn('Dict read failed', e); dictData = {}; }
+      try {
+        const res = await readDictFromHandle(h);
+        dictData = res.map;
+        dictFields = res.fields;
+      } catch(e){ console.warn('Dict read failed', e); dictData = {}; dictFields = DEFAULT_DICT_FIELDS.slice(); }
+      updateFieldOptions();
       renderList();
       return true;
     }
@@ -604,14 +632,22 @@
     els.create.addEventListener('click', createExcel);
     els.dictPick.addEventListener('click', pickDict);
     els.namePick.addEventListener('click', pickName);
+    els.selTitle.addEventListener('change', () => {
+      cfg.titleField = els.selTitle.value;
+      saveCfg(cfg);
+      renderList();
+    });
+    els.selSub.addEventListener('change', () => {
+      cfg.subField = els.selSub.value;
+      saveCfg(cfg);
+      renderList();
+    });
     els.save.addEventListener('click', () => {
       cfg.colors = {
         bg: els.cBg.value, item: els.cItem.value,
         title: els.cTitle.value, sub: els.cSub.value, active: els.cActive.value
       };
       cfg.title = els.titleInput.value || '';
-      cfg.titleField = els.selTitle.value;
-      cfg.subField = els.selSub.value;
       applyColors(cfg.colors);
       applyTitle(cfg.title);
       saveCfg(cfg);
@@ -652,8 +688,11 @@
         const h = await idbGet(cfg.dictIdbKey);
         if (h && await ensureRPermission(h)) {
           dictHandle = h;
-          dictData = await readDictFromHandle(h);
+          const res = await readDictFromHandle(h);
+          dictData = res.map;
+          dictFields = res.fields;
           els.dictLabel.textContent = `• ${cfg.dictFileName || h.name || 'dictionary.xlsx'}`;
+          updateFieldOptions();
           renderList();
         }
       } catch(e){ console.warn('Dict restore failed', e); }

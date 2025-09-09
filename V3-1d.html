@@ -177,6 +177,10 @@
     <button id="select-root" class="ml-auto text-sm px-3 py-1 rounded">Ordner wählen</button>
     <button id="open-settings" title="Einstellungen" class="bg-gray-300 hover:bg-gray-400 text-gray-800 text-sm px-3 py-1 rounded ml-2">⚙️</button>
   </header>
+  <div id="tab-context-menu" class="hidden fixed bg-white border rounded shadow z-50 text-sm">
+    <div data-action="rename" class="px-3 py-1 hover:bg-gray-100 cursor-pointer">Namen bearbeiten</div>
+    <div data-action="delete" class="px-3 py-1 hover:bg-gray-100 cursor-pointer">Tab löschen</div>
+  </div>
   <div class="flex" style="height: calc(100% - 40px);">
     <aside id="sidebar" class="w-72 min-h-full p-3 relative transition-all duration-300 ease-in-out">
       <button id="sidebar-toggle" class="absolute top-2 right-2 text-xl collapse-icon" title="Liste ein-/ausblenden">⬅️</button>
@@ -394,6 +398,8 @@ const settingsBtn = document.getElementById('open-settings');
 const settingsModal = document.getElementById('settings-modal');
 const closeSettingsBtn = document.getElementById('close-settings');
 const saveSettingsBtn = document.getElementById('save-settings');
+const tabContextMenu = document.getElementById('tab-context-menu');
+let tabContextIndex = null;
 // Settings inputs
 const inputAppBg = document.getElementById('setting-app-bg');
 const inputBorderColor = document.getElementById('setting-border-color');
@@ -555,6 +561,34 @@ document.addEventListener('DOMContentLoaded', async () => {
       };
       inp.click();
     }
+  });
+
+  // Custom context menu for tabs
+  document.addEventListener('click', () => {
+    tabContextMenu.classList.add('hidden');
+    tabContextIndex = null;
+  });
+  document.addEventListener('contextmenu', e => {
+    if (!e.target.closest('.tab-item')) {
+      tabContextMenu.classList.add('hidden');
+      tabContextIndex = null;
+    }
+  });
+  tabContextMenu.addEventListener('click', e => {
+    e.stopPropagation();
+    const action = e.target.dataset.action;
+    if (action === 'rename' && tabContextIndex !== null) {
+      const newName = prompt('Tab-Namen bearbeiten:', tabs[tabContextIndex].name);
+      if (newName) {
+        tabs[tabContextIndex].name = newName;
+        renderTabs();
+        saveLayout();
+      }
+    } else if (action === 'delete' && tabContextIndex !== null) {
+      if (confirm('Tab wirklich löschen?')) deleteTab(tabContextIndex);
+    }
+    tabContextMenu.classList.add('hidden');
+    tabContextIndex = null;
   });
 
   // Add new tab
@@ -1065,17 +1099,14 @@ function renderTabs() {
     label.className = 'truncate max-w-xs';
     label.textContent = tab.name;
     item.appendChild(label);
-    const closeBtn = document.createElement('span');
-    closeBtn.className = 'close-btn text-base';
-    closeBtn.textContent = '×';
-    closeBtn.title = 'Tab löschen';
-    closeBtn.addEventListener('click', e => {
-      e.stopPropagation();
-      if (!confirm('Tab wirklich löschen?')) return;
-      deleteTab(idx);
-    });
-    item.appendChild(closeBtn);
     item.addEventListener('click', () => activateTab(idx));
+    item.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      tabContextIndex = idx;
+      tabContextMenu.style.left = `${e.pageX}px`;
+      tabContextMenu.style.top = `${e.pageY}px`;
+      tabContextMenu.classList.remove('hidden');
+    });
     tabsContainer.appendChild(item);
   });
 }

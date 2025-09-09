@@ -86,6 +86,11 @@
     const q = await handle.queryPermission({mode:'readwrite'}); if (q==='granted') return true;
     const r = await handle.requestPermission({mode:'readwrite'}); return r==='granted';
   }
+  async function ensureRPermission(handle){
+    if (!handle?.queryPermission) return true;
+    const q = await handle.queryPermission({mode:'read'}); if (q==='granted') return true;
+    const r = await handle.requestPermission({mode:'read'}); return r==='granted';
+  }
 
   // Robust SheetJS loader (multiple CDNs, memoized)
   async function ensureXLSX(){
@@ -124,19 +129,44 @@
     const ws = wb.Sheets['Devices'] || wb.Sheets[wb.SheetNames[0]];
     if (!ws) return [];
     const rows = XLSX.utils.sheet_to_json(ws, { header:1, raw:false, defval:'' });
-    const data = rows.slice(1).filter(r=>r.length && (r[0]!==''||r[1]!=='')); // skip blanks
-    return data.map((r,i)=>({ id: 'it-'+i+'-'+Date.now().toString(36), name: String(r[0]||''), meldung: String(r[1]||'') }));
+    const data = rows.slice(1).filter(r=>r.length && r[0] !== '');
+    return data.map((r,i)=>({ id: 'it-'+i+'-'+Date.now().toString(36), meldung: String(r[0]||'') }));
   }
   async function writeItemsToHandle(handle, items){
     await ensureXLSX();
     const wb = XLSX.utils.book_new();
-    const aoa = [['Name','Meldung'], ...items.map(it=>[it.name, it.meldung])];
+    const aoa = [['Meldung'], ...items.map(it=>[it.meldung])];
     const ws = XLSX.utils.aoa_to_sheet(aoa);
     XLSX.utils.book_append_sheet(wb, ws, 'Devices');
     const out = XLSX.write(wb, { bookType:'xlsx', type:'array' });
     const w = await handle.createWritable();
     await w.write(new Blob([out], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
     await w.close();
+  }
+
+  async function readDictFromHandle(handle){
+    await ensureXLSX();
+    const f = await handle.getFile();
+    if (f.size === 0) return {};
+    const buf = await f.arrayBuffer();
+    const wb = XLSX.read(buf, { type:'array' });
+    const ws = wb.Sheets['records'] || wb.Sheets[wb.SheetNames[0]];
+    if (!ws) return {};
+    const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
+    const hdr = rows[0]?.map(h=>String(h||'').toLowerCase().trim()) || [];
+    const idx = {meldung:hdr.indexOf('meldung'),auftrag:hdr.indexOf('auftrag'),part:hdr.indexOf('part'),serial:hdr.indexOf('serial')};
+    const map = {};
+    rows.slice(1).forEach(r=>{
+      const m = String(r[idx.meldung]||'').trim();
+      if(!m) return;
+      map[m] = {
+        meldung:m,
+        auftrag:String(r[idx.auftrag]||''),
+        part:String(r[idx.part]||''),
+        serial:String(r[idx.serial]||'')
+      };
+    });
+    return map;
   }
 
   // ---------- UI builders ----------
@@ -168,8 +198,33 @@
               </div>
             </div>
             <div class="db-field" style="grid-column: span 3;">
+              <label>Wörterbuch</label>
+              <div class="db-row">
+                <button class="db-btn db-dict-pick">Excel wählen</button>
+                <span class="db-dict-file db-file"></span>
+              </div>
+            </div>
+            <div class="db-field" style="grid-column: span 3;">
               <label>Titel (optional)</label>
               <input type="text" class="db-input db-title-input" placeholder="Kein Titel">
+            </div>
+            <div class="db-field">
+              <label>Titel-Feld</label>
+              <select class="db-input db-sel-title">
+                <option value="meldung">Meldung</option>
+                <option value="auftrag">Auftrag</option>
+                <option value="part">PartNo</option>
+                <option value="serial">SerialNo</option>
+              </select>
+            </div>
+            <div class="db-field">
+              <label>Untertitel-Feld</label>
+              <select class="db-input db-sel-sub">
+                <option value="meldung">Meldung</option>
+                <option value="auftrag">Auftrag</option>
+                <option value="part">PartNo</option>
+                <option value="serial">SerialNo</option>
+              </select>
             </div>
             <div class="db-field">
               <label>Hintergrund</label>
@@ -197,6 +252,22 @@
           </div>
         </div>
       </div>
+
+      <div class="db-modal db-add-modal">
+        <div class="db-panel">
+          <div class="db-row" style="justify-content:space-between; margin-bottom:.5rem">
+            <div class="font-semibold">Neues Item</div>
+            <button class="db-btn secondary db-add-close">Schließen</button>
+          </div>
+          <div class="db-field" style="grid-column: span 3;">
+            <label>Meldung</label>
+            <input type="text" class="db-input db-add-input" />
+          </div>
+          <div class="db-row" style="justify-content:flex-end; margin-top:.75rem">
+            <button class="db-btn db-add-save">Speichern</button>
+          </div>
+        </div>
+      </div>
     `;
     // custom context menu
     const menu = document.createElement('div');
@@ -215,24 +286,37 @@
       create: root.querySelector('.db-create'),
       save: root.querySelector('.db-save'),
       fLabel: root.querySelector('.db-file'),
+      dictPick: root.querySelector('.db-dict-pick'),
+      dictLabel: root.querySelector('.db-dict-file'),
+      selTitle: root.querySelector('.db-sel-title'),
+      selSub: root.querySelector('.db-sel-sub'),
       cBg: root.querySelector('.db-c-bg'),
       cItem: root.querySelector('.db-c-item'),
       cTitle: root.querySelector('.db-c-title'),
       cSub: root.querySelector('.db-c-sub'),
       cActive: root.querySelector('.db-c-active'),
       titleInput: root.querySelector('.db-title-input'),
+      addModal: root.querySelector('.db-add-modal'),
+      addClose: root.querySelector('.db-add-close'),
+      addSave: root.querySelector('.db-add-save'),
+      addInput: root.querySelector('.db-add-input'),
       menu
     };
   }
-  function cardEl(item){
+  function cardEl(item, cfg, dict){
     const el = document.createElement('div');
     el.className = 'db-card';
     el.dataset.id = item.id;
     el.dataset.meldung = item.meldung || '';
+    const data = dict[item.meldung] || {};
+    const val = (f)=>{
+      if (f === 'meldung') return item.meldung || '';
+      return data[f] || '';
+    };
     el.innerHTML = `
       <div class="db-flex">
-        <div class="db-title">${item.name || ''}</div>
-        <div class="db-sub">${item.meldung || ''}</div>
+        <div class="db-title">${val(cfg.titleField)}</div>
+        <div class="db-sub">${val(cfg.subField)}</div>
       </div>
       <div class="db-handle" title="Ziehen">⋮⋮</div>
     `;
@@ -249,9 +333,12 @@
     const els = buildUI(root);
     const instanceId = instanceIdOf(root);
     const idbKey = `deviceBoard:${instanceId}`;
+    const dictIdbKey = `deviceBoardDict:${instanceId}`;
 
     let fileHandle = null;
-    let items = []; // {id, name, meldung}
+    let dictHandle = null;
+    let dictData = {};
+    let items = []; // {id, meldung}
 
     // load per-instance config
     function loadCfg(){
@@ -259,7 +346,11 @@
       const cfg = doc?.instances?.[instanceId]?.deviceBoard || {};
       return {
         idbKey: cfg.idbKey || idbKey,
+        dictIdbKey: cfg.dictIdbKey || dictIdbKey,
         fileName: cfg.fileName || '',
+        dictFileName: cfg.dictFileName || '',
+        titleField: cfg.titleField || 'meldung',
+        subField: cfg.subField || 'auftrag',
         title: cfg.title || '',
         colors: cfg.colors || { bg:'#f5f7fb', item:'#ffffff', title:'#2563eb', sub:'#4b5563', active:'#10b981' }
       };
@@ -310,9 +401,12 @@
     els.cSub.value = cfg.colors.sub;
     els.cActive.value = cfg.colors.active;
     els.titleInput.value = cfg.title || '';
+    els.selTitle.value = cfg.titleField;
+    els.selSub.value = cfg.subField;
     applyColors(cfg.colors);
     applyTitle(cfg.title);
     els.fLabel.textContent = cfg.fileName ? `• ${cfg.fileName}` : 'Keine Datei gewählt';
+    els.dictLabel.textContent = cfg.dictFileName ? `• ${cfg.dictFileName}` : 'Kein Wörterbuch';
 
     // -- Sortable (cross-instance group, handle only on right grip)
     const sortable = new Sortable(els.list, {
@@ -329,14 +423,13 @@
 
     function renderList(){
       els.list.innerHTML = '';
-      items.forEach(it => els.list.appendChild(cardEl(it)));
+      items.forEach(it => els.list.appendChild(cardEl(it, cfg, dictData)));
       updateHighlights();
     }
     function syncFromDOM(){
       items = Array.from(els.list.children).map(el => ({
         id: el.dataset.id,
-        name: el.querySelector('.db-title').textContent.trim(),
-        meldung: el.dataset.meldung || el.querySelector('.db-sub').textContent.trim()
+        meldung: el.dataset.meldung || ''
       }));
     }
 
@@ -381,17 +474,44 @@
       } catch(e){ if (e?.name!=='AbortError') console.warn(e); }
     }
 
-    // + button
-    els.add.addEventListener('click', async () => {
-      const name = prompt('Name des Items:','');
-      if (name===null) return;
-      const meldung = prompt('Meldung:','') ?? '';
-      const it = { id: 'it-'+Math.random().toString(36).slice(2), name: (name||'').trim(), meldung: (meldung||'').trim() };
+    async function bindDictHandle(h){
+      const ok = await ensureRPermission(h);
+      if (!ok) return false;
+      dictHandle = h;
+      await idbSet(cfg.dictIdbKey, h);
+      cfg.dictFileName = h.name || 'dictionary.xlsx';
+      els.dictLabel.textContent = `• ${cfg.dictFileName}`;
+      saveCfg(cfg);
+      try { dictData = await readDictFromHandle(h); } catch(e){ console.warn('Dict read failed', e); dictData = {}; }
+      renderList();
+      return true;
+    }
+    async function pickDict(){
+      try {
+        const [h] = await window.showOpenFilePicker({
+          types: [{ description:'Excel', accept:{ 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':['.xlsx'] } }],
+          excludeAcceptAllOption:false, multiple:false
+        });
+        if (!h) return;
+        await bindDictHandle(h);
+      } catch(e){ if (e?.name!=='AbortError') console.warn(e); }
+    }
+
+    function openAdd(){ els.addModal.classList.add('open'); els.addInput.value = ''; }
+    function closeAdd(){ els.addModal.classList.remove('open'); }
+    els.add.addEventListener('click', openAdd);
+    els.addClose.addEventListener('click', closeAdd);
+    els.addSave.addEventListener('click', () => {
+      const meldung = (els.addInput.value || '').trim();
+      if (!meldung) { closeAdd(); return; }
+      const it = { id: 'it-'+Math.random().toString(36).slice(2), meldung };
       items.push(it);
-      els.list.appendChild(cardEl(it));
+      els.list.appendChild(cardEl(it, cfg, dictData));
       scheduleSave();
       updateHighlights();
+      closeAdd();
     });
+    els.addInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter') els.addSave.click(); });
 
     // clicking a card (except handle) sets active Meldung
     els.list.addEventListener('click', (e) => {
@@ -414,15 +534,19 @@
     function closeModal(){ els.modal.classList.remove('open'); }
     els.pick.addEventListener('click', pickExcel);
     els.create.addEventListener('click', createExcel);
+    els.dictPick.addEventListener('click', pickDict);
     els.save.addEventListener('click', () => {
       cfg.colors = {
         bg: els.cBg.value, item: els.cItem.value,
         title: els.cTitle.value, sub: els.cSub.value, active: els.cActive.value
       };
       cfg.title = els.titleInput.value || '';
+      cfg.titleField = els.selTitle.value;
+      cfg.subField = els.selSub.value;
       applyColors(cfg.colors);
       applyTitle(cfg.title);
       saveCfg(cfg);
+      renderList();
       closeModal();
     });
     els.close.addEventListener('click', closeModal);
@@ -442,7 +566,7 @@
     window.addEventListener('click', () => els.menu.classList.remove('open'));
     window.addEventListener('keydown', (e)=>{ if (e.key === 'Escape') els.menu.classList.remove('open'); });
 
-    // restore previous handle + items
+    // restore previous handles + items
     (async () => {
       try {
         const h = await idbGet(cfg.idbKey);
@@ -453,6 +577,17 @@
           renderList();
         }
       } catch(e){ console.warn('Restore failed', e); }
+    })();
+    (async () => {
+      try {
+        const h = await idbGet(cfg.dictIdbKey);
+        if (h && await ensureRPermission(h)) {
+          dictHandle = h;
+          dictData = await readDictFromHandle(h);
+          els.dictLabel.textContent = `• ${cfg.dictFileName || h.name || 'dictionary.xlsx'}`;
+          renderList();
+        }
+      } catch(e){ console.warn('Dict restore failed', e); }
     })();
 
     // highlight logic
@@ -474,6 +609,7 @@
         els.menu?.remove();
         (async () => {
           try { await idbDel(cfg.idbKey); } catch {}
+          try { await idbDel(cfg.dictIdbKey); } catch {}
           try { removeCfg(); } catch {}
         })();
         mo.disconnect();

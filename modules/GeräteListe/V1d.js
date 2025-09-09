@@ -169,6 +169,22 @@
     return map;
   }
 
+  async function readNameRulesFromHandle(handle){
+    await ensureXLSX();
+    const f=await handle.getFile();
+    if(f.size===0)return[];
+    const buf=await f.arrayBuffer();
+    const wb=XLSX.read(buf,{type:'array'});
+    const ws=wb.Sheets['Rules']||wb.Sheets[wb.SheetNames[0]];
+    if(!ws)return[];
+    const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+    return rows.slice(1).filter(r=>r.length&&(r[0]!==''||r[1]!==''))
+      .map(r=>({prefix:String(r[0]||''),name:String(r[1]||'')}))
+      .sort((a,b)=>b.prefix.length-a.prefix.length);
+  }
+
+  const lookupName=(part,rules)=>{for(const r of rules){if(part.startsWith(r.prefix))return r.name;}return'';};
+
   // ---------- UI builders ----------
   function buildUI(root){
     root.innerHTML = `
@@ -202,6 +218,13 @@
               <div class="db-row">
                 <button class="db-btn db-dict-pick">Excel wählen</button>
                 <span class="db-dict-file db-file"></span>
+              </div>
+            </div>
+            <div class="db-field" style="grid-column: span 3;">
+              <label>Namensregeln</label>
+              <div class="db-row">
+                <button class="db-btn db-name-pick">Excel wählen</button>
+                <span class="db-name-file db-file"></span>
               </div>
             </div>
             <div class="db-field" style="grid-column: span 3;">
@@ -288,6 +311,8 @@
       fLabel: root.querySelector('.db-file'),
       dictPick: root.querySelector('.db-dict-pick'),
       dictLabel: root.querySelector('.db-dict-file'),
+      namePick: root.querySelector('.db-name-pick'),
+      nameLabel: root.querySelector('.db-name-file'),
       selTitle: root.querySelector('.db-sel-title'),
       selSub: root.querySelector('.db-sel-sub'),
       cBg: root.querySelector('.db-c-bg'),
@@ -303,7 +328,7 @@
       menu
     };
   }
-  function cardEl(item, cfg, dict){
+  function cardEl(item, cfg, dict, rules){
     const el = document.createElement('div');
     el.className = 'db-card';
     el.dataset.id = item.id;
@@ -311,6 +336,7 @@
     const data = dict[item.meldung] || {};
     const val = (f)=>{
       if (f === 'meldung') return item.meldung || '';
+      if (f === 'name') return lookupName(data.part || '', rules);
       return data[f] || '';
     };
     el.innerHTML = `
@@ -334,10 +360,13 @@
     const instanceId = instanceIdOf(root);
     const idbKey = `deviceBoard:${instanceId}`;
     const dictIdbKey = `deviceBoardDict:${instanceId}`;
+    const nameIdbKey = `deviceBoardNames:${instanceId}`;
 
     let fileHandle = null;
     let dictHandle = null;
     let dictData = {};
+    let nameHandle = null;
+    let nameRules = [];
     let items = []; // {id, meldung}
 
     // load per-instance config
@@ -347,8 +376,10 @@
       return {
         idbKey: cfg.idbKey || idbKey,
         dictIdbKey: cfg.dictIdbKey || dictIdbKey,
+        nameIdbKey: cfg.nameIdbKey || nameIdbKey,
         fileName: cfg.fileName || '',
         dictFileName: cfg.dictFileName || '',
+        nameFileName: cfg.nameFileName || '',
         titleField: cfg.titleField || 'meldung',
         subField: cfg.subField || 'auftrag',
         title: cfg.title || '',
@@ -407,6 +438,8 @@
     applyTitle(cfg.title);
     els.fLabel.textContent = cfg.fileName ? `• ${cfg.fileName}` : 'Keine Datei gewählt';
     els.dictLabel.textContent = cfg.dictFileName ? `• ${cfg.dictFileName}` : 'Kein Wörterbuch';
+    els.nameLabel.textContent = cfg.nameFileName ? `• ${cfg.nameFileName}` : 'Keine Namensregeln';
+    updateFieldOptions();
 
     // -- Sortable (cross-instance group, handle only on right grip)
     const sortable = new Sortable(els.list, {
@@ -423,8 +456,19 @@
 
     function renderList(){
       els.list.innerHTML = '';
-      items.forEach(it => els.list.appendChild(cardEl(it, cfg, dictData)));
+      items.forEach(it => els.list.appendChild(cardEl(it, cfg, dictData, nameRules)));
       updateHighlights();
+    }
+    function updateFieldOptions(){
+      const hasName = nameRules.length > 0;
+      [els.selTitle, els.selSub].forEach(sel=>{
+        const exists = Array.from(sel.options).some(o=>o.value==='name');
+        if(hasName && !exists){ const opt=document.createElement('option');opt.value='name';opt.textContent='Name';sel.appendChild(opt); }
+        if(!hasName && exists){ Array.from(sel.options).forEach(o=>{if(o.value==='name')o.remove();}); }
+      });
+      if(!hasName){ if(cfg.titleField==='name')cfg.titleField='meldung'; if(cfg.subField==='name')cfg.subField='auftrag'; }
+      els.selTitle.value = cfg.titleField;
+      els.selSub.value = cfg.subField;
     }
     function syncFromDOM(){
       items = Array.from(els.list.children).map(el => ({
@@ -497,6 +541,30 @@
       } catch(e){ if (e?.name!=='AbortError') console.warn(e); }
     }
 
+    async function bindNameHandle(h){
+      const ok = await ensureRPermission(h);
+      if (!ok) return false;
+      nameHandle = h;
+      await idbSet(cfg.nameIdbKey, h);
+      cfg.nameFileName = h.name || 'namerules.xlsx';
+      els.nameLabel.textContent = `• ${cfg.nameFileName}`;
+      saveCfg(cfg);
+      try { nameRules = await readNameRulesFromHandle(h); } catch(e){ console.warn('Name rules read failed', e); nameRules = []; }
+      updateFieldOptions();
+      renderList();
+      return true;
+    }
+    async function pickName(){
+      try {
+        const [h] = await window.showOpenFilePicker({
+          types: [{ description:'Excel', accept:{ 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':['.xlsx'] } }],
+          excludeAcceptAllOption:false, multiple:false
+        });
+        if (!h) return;
+        await bindNameHandle(h);
+      } catch(e){ if (e?.name!=='AbortError') console.warn(e); }
+    }
+
     function openAdd(){ els.addModal.classList.add('open'); els.addInput.value = ''; }
     function closeAdd(){ els.addModal.classList.remove('open'); }
     els.add.addEventListener('click', openAdd);
@@ -506,7 +574,7 @@
       if (!meldung) { closeAdd(); return; }
       const it = { id: 'it-'+Math.random().toString(36).slice(2), meldung };
       items.push(it);
-      els.list.appendChild(cardEl(it, cfg, dictData));
+      els.list.appendChild(cardEl(it, cfg, dictData, nameRules));
       scheduleSave();
       updateHighlights();
       closeAdd();
@@ -535,6 +603,7 @@
     els.pick.addEventListener('click', pickExcel);
     els.create.addEventListener('click', createExcel);
     els.dictPick.addEventListener('click', pickDict);
+    els.namePick.addEventListener('click', pickName);
     els.save.addEventListener('click', () => {
       cfg.colors = {
         bg: els.cBg.value, item: els.cItem.value,
@@ -589,6 +658,18 @@
         }
       } catch(e){ console.warn('Dict restore failed', e); }
     })();
+    (async () => {
+      try {
+        const h = await idbGet(cfg.nameIdbKey);
+        if (h && await ensureRPermission(h)) {
+          nameHandle = h;
+          nameRules = await readNameRulesFromHandle(h);
+          els.nameLabel.textContent = `• ${cfg.nameFileName || h.name || 'namerules.xlsx'}`;
+          updateFieldOptions();
+          renderList();
+        }
+      } catch(e){ console.warn('Name rules restore failed', e); }
+    })();
 
     // highlight logic
     function updateHighlights(){
@@ -610,6 +691,7 @@
         (async () => {
           try { await idbDel(cfg.idbKey); } catch {}
           try { await idbDel(cfg.dictIdbKey); } catch {}
+          try { await idbDel(cfg.nameIdbKey); } catch {}
           try { removeCfg(); } catch {}
         })();
         mo.disconnect();

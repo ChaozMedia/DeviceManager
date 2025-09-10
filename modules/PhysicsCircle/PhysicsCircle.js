@@ -19,7 +19,7 @@ window.renderPhysicsCircle = function(targetDiv, ctx = {}) {
   let vy = 0;
   const damping = 0.98;
   const gravity = Number(settings.gravity ?? 0.5);
-  const dragResponse = Number(settings.dragResponse ?? 0.5);
+  const friction = Number(settings.friction ?? 0.02);
 
   const ball = document.createElement('div');
   ball.style.position = 'absolute';
@@ -38,8 +38,11 @@ window.renderPhysicsCircle = function(targetDiv, ctx = {}) {
     const dy = rect.top - lastRect.top;
     lastRect = rect;
 
-    vx -= dx * dragResponse;
-    vy -= dy * dragResponse;
+    // keep the ball in world space as the module moves, then apply friction
+    x -= dx;
+    y -= dy;
+    vx += dx * friction;
+    vy += dy * friction;
     vy += gravity;
 
     x += vx;

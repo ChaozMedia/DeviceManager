@@ -8,6 +8,6 @@
   "maxH": 6,
   "settings": {
     "gravity": 0.5,
-    "dragResponse": 0.5
+    "friction": 0.02
   }
 }

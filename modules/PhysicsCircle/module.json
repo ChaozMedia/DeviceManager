@@ -5,5 +5,9 @@
   "minW": 2,
   "minH": 2,
   "maxW": 6,
-  "maxH": 6
+  "maxH": 6,
+  "settings": {
+    "gravity": 0.5,
+    "dragResponse": 0.5
+  }
 }

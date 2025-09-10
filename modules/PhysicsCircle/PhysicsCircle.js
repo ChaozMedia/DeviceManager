@@ -1,4 +1,4 @@
-window.renderPhysicsCircle = function(targetDiv) {
+window.renderPhysicsCircle = function(targetDiv, ctx = {}) {
   // Clear GridStack styling and ensure the container fills its cell
   targetDiv.className = '';
   targetDiv.innerHTML = '';
@@ -11,13 +11,15 @@ window.renderPhysicsCircle = function(targetDiv) {
   targetDiv.style.borderRadius = 'var(--module-border-radius, 1.25rem)';
   targetDiv.style.boxSizing = 'border-box';
 
+  const settings = ctx.moduleJson?.settings || {};
   const radius = 20;
   let x = radius;
   let y = radius;
   let vx = 0;
   let vy = 0;
   const damping = 0.98;
-  const gravity = 0.5;
+  const gravity = Number(settings.gravity ?? 0.5);
+  const dragResponse = Number(settings.dragResponse ?? 0.5);
 
   const ball = document.createElement('div');
   ball.style.position = 'absolute';
@@ -36,8 +38,8 @@ window.renderPhysicsCircle = function(targetDiv) {
     const dy = rect.top - lastRect.top;
     lastRect = rect;
 
-    vx -= dx * 0.5;
-    vy -= dy * 0.5;
+    vx -= dx * dragResponse;
+    vy -= dy * dragResponse;
     vy += gravity;
 
     x += vx;

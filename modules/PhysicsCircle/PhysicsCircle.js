@@ -3,7 +3,9 @@ window.renderPhysicsCircle = function(targetDiv) {
   targetDiv.className = '';
   targetDiv.style.position = 'relative';
   targetDiv.style.overflow = 'hidden';
-  targetDiv.style.background = '#f9f9f9';
+  targetDiv.style.background = 'var(--module-bg, #fff)';
+  targetDiv.style.border = '1px solid var(--module-border-color, #e5e7eb)';
+  targetDiv.style.borderRadius = 'var(--module-border-radius, 1.25rem)';
 
   const radius = 20;
   let x = radius;
@@ -16,7 +18,9 @@ window.renderPhysicsCircle = function(targetDiv) {
   ball.style.position = 'absolute';
   ball.style.width = ball.style.height = radius * 2 + 'px';
   ball.style.borderRadius = '50%';
-  ball.style.background = '#3498db';
+  ball.style.background = 'var(--text-color, #111827)';
+  ball.style.border = '1px solid var(--module-border-color, #e5e7eb)';
+  ball.style.boxSizing = 'border-box';
   targetDiv.appendChild(ball);
 
   let lastRect = targetDiv.getBoundingClientRect();

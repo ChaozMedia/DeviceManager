@@ -1,0 +1,9 @@
+{
+  "name": "Status Overlay",
+  "icon": "📡",
+  "script": "renderStatusOverlay",
+  "minW": 3,
+  "minH": 2,
+  "maxW": 6,
+  "maxH": 4
+}

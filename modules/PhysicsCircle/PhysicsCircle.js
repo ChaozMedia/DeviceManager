@@ -1,11 +1,15 @@
 window.renderPhysicsCircle = function(targetDiv) {
-  // Clear GridStack styling and set up container
+  // Clear GridStack styling and ensure the container fills its cell
   targetDiv.className = '';
+  targetDiv.innerHTML = '';
   targetDiv.style.position = 'relative';
   targetDiv.style.overflow = 'hidden';
+  targetDiv.style.width = '100%';
+  targetDiv.style.height = '100%';
   targetDiv.style.background = 'var(--module-bg, #fff)';
   targetDiv.style.border = '1px solid var(--module-border-color, #e5e7eb)';
   targetDiv.style.borderRadius = 'var(--module-border-radius, 1.25rem)';
+  targetDiv.style.boxSizing = 'border-box';
 
   const radius = 20;
   let x = radius;

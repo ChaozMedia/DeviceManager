@@ -1,0 +1,9 @@
+{
+  "name": "Physics Circle",
+  "icon": "⚪",
+  "script": "renderPhysicsCircle",
+  "minW": 2,
+  "minH": 2,
+  "maxW": 6,
+  "maxH": 6
+}

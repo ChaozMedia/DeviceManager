@@ -17,6 +17,7 @@ window.renderPhysicsCircle = function(targetDiv) {
   let vx = 0;
   let vy = 0;
   const damping = 0.98;
+  const gravity = 0.5;
 
   const ball = document.createElement('div');
   ball.style.position = 'absolute';
@@ -35,8 +36,9 @@ window.renderPhysicsCircle = function(targetDiv) {
     const dy = rect.top - lastRect.top;
     lastRect = rect;
 
-    vx -= dx;
-    vy -= dy;
+    vx -= dx * 0.5;
+    vy -= dy * 0.5;
+    vy += gravity;
 
     x += vx;
     y += vy;

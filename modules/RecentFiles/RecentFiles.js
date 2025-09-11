@@ -41,6 +41,10 @@
     .rf-field label{display:block;font-size:.85rem;font-weight:600;margin-bottom:.25rem;}
     .rf-color{width:100%;height:2.25rem;border:1px solid #e5e7eb;border-radius:.5rem;}
     .rf-btn{padding:.4rem .7rem;border-radius:.5rem;background:var(--button-bg,#2563eb);color:var(--button-text,#fff);}
+    .rf-menu{position:fixed;z-index:1000;display:none;min-width:180px;padding:.25rem;background:var(--sidebar-module-card-bg,#fff);color:var(--sidebar-module-card-text,#111);border:1px solid var(--border-color,#e5e7eb);border-radius:.5rem;box-shadow:0 10px 24px rgba(0,0,0,.18);}
+    .rf-menu.open{display:block;}
+    .rf-menu .mi{display:block;width:100%;padding:.5rem .75rem;text-align:left;border-radius:.4rem;}
+    .rf-menu .mi:hover{background:rgba(0,0,0,.06);}
     `;
     const tag = document.createElement('style'); tag.id='recent-files-styles'; tag.textContent=css; document.head.appendChild(tag);
   }
@@ -62,9 +66,10 @@
 
     root.innerHTML = `
       <div class="rf-root" style="--rf-bg:${inst.colors.bg};--rf-item-bg:${inst.colors.item};--rf-active:${inst.colors.active}">
-        <div class="rf-titlebar"><span class="rf-title">${title}</span><button class="rf-settings">⚙️</button></div>
+        <div class="rf-titlebar"><span class="rf-title">${title}</span></div>
         <div class="rf-surface"><div class="rf-list"></div></div>
       </div>
+      <div class="rf-menu"><button class="mi mi-opt">⚙️ Optionen</button></div>
       <div class="rf-modal"><div class="rf-panel">
         <div class="rf-field"><label>Background</label><input type="color" class="rf-color rf-bg" value="${inst.colors.bg}"></div>
         <div class="rf-field"><label>Item</label><input type="color" class="rf-color rf-item" value="${inst.colors.item}"></div>
@@ -76,21 +81,32 @@
     const els = {
       list: root.querySelector('.rf-list'),
       modal: root.querySelector('.rf-modal'),
-      settings: root.querySelector('.rf-settings'),
       close: root.querySelector('.rf-close'),
       folderBtn: root.querySelector('.rf-folder'),
       bg: root.querySelector('.rf-bg'),
       item: root.querySelector('.rf-item'),
       active: root.querySelector('.rf-active'),
-      rootBox: root.querySelector('.rf-root')
+      rootBox: root.querySelector('.rf-root'),
+      menu: root.querySelector('.rf-menu')
     };
 
-    // modal events
-    els.settings.addEventListener('click', ()=>{ els.modal.classList.add('open'); });
+    // modal + context menu events
     els.close.addEventListener('click', ()=>{ els.modal.classList.remove('open'); });
     els.bg.addEventListener('input', ()=>{ inst.colors.bg=els.bg.value; els.rootBox.style.setProperty('--rf-bg', inst.colors.bg); saveInst(); });
     els.item.addEventListener('input', ()=>{ inst.colors.item=els.item.value; els.rootBox.style.setProperty('--rf-item-bg', inst.colors.item); saveInst(); });
     els.active.addEventListener('input', ()=>{ inst.colors.active=els.active.value; els.rootBox.style.setProperty('--rf-active', inst.colors.active); saveInst(); });
+
+    function showMenu(x,y){
+      const pad=8, vw=innerWidth, vh=innerHeight;
+      const rect=els.menu.getBoundingClientRect(); const w=rect.width||180, h=rect.height||44;
+      els.menu.style.left = Math.min(Math.max(x,pad), vw-w-pad)+"px";
+      els.menu.style.top  = Math.min(Math.max(y,pad), vh-h-pad)+"px";
+      els.menu.classList.add('open');
+    }
+    root.addEventListener('contextmenu', (e)=>{ e.preventDefault(); e.stopPropagation(); showMenu(e.clientX, e.clientY); });
+    document.addEventListener('click', ()=>els.menu.classList.remove('open'));
+    document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') els.menu.classList.remove('open'); });
+    els.menu.querySelector('.mi-opt').addEventListener('click', ()=>{ els.menu.classList.remove('open'); els.modal.classList.add('open'); });
 
     // directory picker
     els.folderBtn.addEventListener('click', async ()=>{
@@ -103,34 +119,42 @@
       }catch(e){ console.warn(e); }
     });
 
+    async function gatherFiles(dirHandle, base=''){
+      const out=[];
+      for await(const [name,handle] of dirHandle.entries()){
+        const path=base+name;
+        if(handle.kind==='file'){
+          try{
+            const file=await handle.getFile();
+            out.push({name, path, handle, date:file.lastModified});
+          }catch{}
+        } else if(handle.kind==='directory'){
+          out.push(...await gatherFiles(handle, path+'/'));
+        }
+      }
+      return out;
+    }
+
     async function loadList(dirHandle){
       if(!dirHandle) return;
       els.list.innerHTML='';
-      const items = [];
-      for await(const [name,handle] of dirHandle.entries()){
-        if(handle.kind==='file'){
-          try{
-            const file = await handle.getFile();
-            items.push({name, handle, date:file.lastModified});
-          }catch{}
-        }
-      }
+      const items = await gatherFiles(dirHandle);
       items.sort((a,b)=>b.date-a.date);
       items.forEach(item=>{
         const div=document.createElement('div');
         div.className='rf-item';
-        div.innerHTML=`<span>${item.name}</span><span class="text-xs opacity-75">${new Date(item.date).toLocaleString()}</span>`;
-        div.addEventListener('click',()=>selectItem(div, item.handle));
+        div.innerHTML=`<span>${item.path}</span><span class="text-xs opacity-75">${new Date(item.date).toLocaleString()}</span>`;
+        div.addEventListener('click',()=>selectItem(div, item));
         els.list.appendChild(div);
       });
     }
 
-    function selectItem(el, handle){
+    function selectItem(el, item){
       els.list.querySelectorAll('.rf-item').forEach(i=>i.classList.remove('active'));
       el.classList.add('active');
       // Save path to general so other modules can read
       doc = loadDoc();
-      (doc.general ||= {}).recentFilePath = handle.name; // name only; full path not available
+      (doc.general ||= {}).recentFilePath = item.path;
       saveDoc(doc);
     }
 

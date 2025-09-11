@@ -34,7 +34,7 @@
 
   function getPath(){
     const doc = loadDoc();
-    return doc?.general?.recentFilePath || null;
+    return doc?.general?.recentFilePath || doc?.general?.recentFile || null;
   }
 
   function idbOpen(){
@@ -136,6 +136,7 @@
     const style = document.createElement('style');
     style.id = 'rv-styles';
     style.textContent = `
+      .rv-container { overflow:auto; font-family:monospace; }
       .rv-line { white-space: pre; background:#e5e5e5; }
       .rv-line.rv-passed { background:#d4f8d4; }
       .rv-line.rv-failed { background:#f8d4d4; }
@@ -146,12 +147,28 @@
 
   window.renderRecordViewer = function(root){
     ensureStyles();
-    loadAndRender(root);
-    function onStorage(ev){ if(ev.key === LS_KEY) loadAndRender(root); }
+    root.classList.add('rv-container');
+
+    let lastPath;
+
+    async function refresh(){
+      const p = getPath();
+      if(p !== lastPath){
+        lastPath = p;
+        await loadAndRender(root);
+      }
+    }
+
+    refresh();
+
+    function onStorage(ev){ if(ev.key === LS_KEY) refresh(); }
     window.addEventListener('storage', onStorage);
+    const interval = setInterval(refresh, 1000);
+
     const mo = new MutationObserver(() => {
       if(!document.body.contains(root)){
         window.removeEventListener('storage', onStorage);
+        clearInterval(interval);
         mo.disconnect();
       }
     });

@@ -3,6 +3,25 @@
   const IDB_NAME = 'modulesApp';
   const IDB_STORE = 'fs-handles';
 
+  // ensure "storage" events also fire in the same tab
+  function patchStorage(){
+    if(localStorage.__rvPatched) return;
+    const orig = localStorage.setItem;
+    localStorage.setItem = function(key, val){
+      const old = localStorage.getItem(key);
+      orig.apply(this, arguments);
+      window.dispatchEvent(new StorageEvent('storage', {
+        key,
+        oldValue: old,
+        newValue: String(val),
+        storageArea: localStorage
+      }));
+    };
+    localStorage.__rvPatched = true;
+  }
+
+  patchStorage();
+
   // ----- helpers -----
   function escapeHtml(str){
     return str.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
@@ -99,10 +118,10 @@
         let cls = '';
         if(trimmed.includes('clfocused')){
           cls = 'rv-focused';
-        }else if(trimmed.includes('Step:')){
-          cls = 'rv-failed';
         }else if(trimmed.includes('clchecked')){
           cls = 'rv-passed';
+        }else if(trimmed.includes('Step:')){
+          cls = 'rv-failed';
         }
         return `<div class="rv-line ${cls}">${escapeHtml(line)}</div>`;
       }).join('');

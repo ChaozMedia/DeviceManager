@@ -1,0 +1,7 @@
+{
+  "name": "Record Viewer",
+  "icon": "📄",
+  "script": "renderRecordViewer",
+  "minW": 4,
+  "minH": 4
+}

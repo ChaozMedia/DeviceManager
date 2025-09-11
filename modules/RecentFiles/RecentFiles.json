@@ -1,0 +1,9 @@
+{
+  "name": "RecentFiles",
+  "icon": "🗂️",
+  "script": "renderRecentFiles",
+  "minW": 2,
+  "minH": 2,
+  "w": 2,
+  "h": 2
+}

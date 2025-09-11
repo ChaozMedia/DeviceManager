@@ -1,20 +1,21 @@
 (function(){
-  const LS_KEYS = ['recentFile', 'recentFilePath']; // keys set by recentfiles module
+  const LS_KEY = 'module_data_v1'; // document key used by recentFiles
 
   function escapeHtml(str){
     return str.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
   }
+
   function getPath(){
-    for(const k of LS_KEYS){
-      const v = localStorage.getItem(k);
-      if(v) return {key:k, value:v};
+    try{
+      const doc = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
+      return doc?.general?.recentFilePath || null;
+    }catch{
+      return null;
     }
-    return null;
   }
 
   async function loadAndRender(root){
-    const entry = getPath();
-    const path = entry?.value;
+    const path = getPath();
     if(!path){
       root.textContent = 'No recent file selected.';
       return;
@@ -56,7 +57,7 @@
   window.renderRecordViewer = function(root){
     ensureStyles();
     loadAndRender(root);
-    function onStorage(ev){ if(ev.key && LS_KEYS.includes(ev.key)) loadAndRender(root); }
+    function onStorage(ev){ if(ev.key === LS_KEY) loadAndRender(root); }
     window.addEventListener('storage', onStorage);
     const mo = new MutationObserver(() => {
       if(!document.body.contains(root)){
